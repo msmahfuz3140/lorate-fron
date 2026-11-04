@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://lorate-fron.vercel.app'),
+  metadataBase: new URL('https://roulettecomputer.com'),
   title: 'Roulette.tools — The Most Powerful European Roulette Prediction Platform',
   description: 'Algorithmic real-time prediction engine for European Roulette across 20+ Evolution Gaming & Pragmatic Play live tables. Offset, Target, and Dealer Signature strategies.',
   keywords: ['roulette prediction', 'european roulette tool', 'roulette algorithm', 'dealer signature strategy', 'evolution gaming tracker'],

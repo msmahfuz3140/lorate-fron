@@ -69,6 +69,7 @@ async function performFetch<T>(endpoint: string, options: RequestInit = {}): Pro
   }
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
+    credentials: options.credentials || 'include',
     ...options,
     headers
   });
