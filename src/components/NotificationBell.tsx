@@ -113,11 +113,11 @@ export function NotificationBell() {
           setIsOpen(!isOpen);
           if (!isOpen) fetchNotifications();
         }}
-        className="relative p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+        className="relative p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/50 shrink-0"
         title="Notifications"
         aria-label="View notifications"
       >
-        <Bell className="h-5 w-5" />
+        <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
         {unreadCount > 0 && (
           <span className="absolute top-1 right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-black text-black">
             {unreadCount > 9 ? '9+' : unreadCount}
@@ -132,7 +132,7 @@ export function NotificationBell() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.96 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-white/10 bg-[#0d121f]/95 backdrop-blur-xl shadow-2xl z-50 overflow-hidden"
+            className="fixed inset-x-3 sm:inset-x-auto sm:right-0 mt-2 w-auto sm:w-96 max-w-sm sm:max-w-none rounded-2xl border border-white/10 bg-[#0d121f]/95 backdrop-blur-xl shadow-2xl z-50 overflow-hidden mx-auto sm:mx-0"
           >
             {/* Header */}
             <div className="flex items-center justify-between border-b border-white/10 p-4">
