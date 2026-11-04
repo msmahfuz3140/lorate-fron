@@ -1,0 +1,2698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Live Roulette — Select a Table</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎡</text></svg>" />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#05090f;
+  --card:#0b1220;
+  --fg:#e9e4d8;
+  --primary:#f5b301;
+  --teal:#1fc8a9;
+  --teal-dim:rgba(31,200,169,.35);
+  --red:#ff4d5e;
+  --green:#22c55e;
+  --border:rgba(255,255,255,.08);
+  --muted:#7d8aa0;
+}
+body{
+  font-family:'Rajdhani',sans-serif;
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(31,200,169,.07) 0%, transparent 45%),
+    radial-gradient(ellipse at 90% 20%, rgba(245,179,1,.05) 0%, transparent 40%),
+    var(--bg);
+  color:var(--fg);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(31,200,169,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(31,200,169,.045) 1px,transparent 1px);
+  background-size:60px 60px;
+  transform:translateZ(0);          /* promote the fixed grid layer — avoids black flicker */
+  will-change:transform;
+  backface-visibility:hidden;
+}
+a{color:inherit;text-decoration:none}
+.topbar{
+  position:sticky;top:0;z-index:50;
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  background:rgba(5,9,15,.82);
+  border-bottom:1px solid var(--border);
+  transform:translateZ(0);          /* own compositing layer: stops repaint smearing */
+  isolation:isolate;
+}
+.topbar-inner{max-width:1320px;margin:0 auto;padding:.7rem 1.2rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:.6rem;font-family:'Orbitron',monospace;font-weight:800;letter-spacing:.12em}
+.logo-mark{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:conic-gradient(from 0deg,#ff4d5e,#f5b301,#22c55e,#1fc8a9,#ff4d5e);
+  box-shadow:0 0 18px rgba(245,179,1,.35);font-size:18px}
+.logo small{display:block;font-size:.58rem;color:var(--muted);letter-spacing:.28em;font-weight:600}
+.status-pill{display:inline-flex;align-items:center;gap:.5rem;font-family:'Orbitron',monospace;font-size:.62rem;letter-spacing:.18em;
+  padding:.4rem .8rem;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.03)}
+.dot{width:8px;height:8px;border-radius:50%;background:#f5b301;box-shadow:0 0 8px currentColor}
+.dot.live{background:#00e6a0;color:#00e6a0;animation:blink 1.2s infinite}
+.dot.conn{background:#f5b301;color:#f5b301;animation:blink .7s infinite}
+.dot.err{background:#ff4d5e;color:#ff4d5e}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.hstats{margin-left:auto;display:flex;gap:.6rem;flex-wrap:wrap}
+.hstat{font-family:'Orbitron',monospace;font-size:.62rem;letter-spacing:.12em;padding:.4rem .7rem;border-radius:.5rem;
+  background:rgba(255,255,255,.03);border:1px solid var(--border);color:#cbd5e1}
+.hstat b{color:var(--teal)}
+.hstat.gold b{color:var(--primary)}
+.wrap{position:relative;z-index:1;max-width:1320px;margin:0 auto;padding:1.2rem 1.2rem 4rem}
+.divider{display:flex;align-items:center;gap:.8rem;margin:1.2rem 0 1.4rem;color:var(--teal);
+  font-family:'Orbitron',monospace;font-size:.68rem;letter-spacing:.35em}
+.divider .line{flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(31,200,169,.25),transparent)}
+.controls{display:flex;gap:.6rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
+.search{flex:1;min-width:200px;max-width:340px;background:#0a1120;border:1px solid var(--border);border-radius:.6rem;
+  padding:.6rem .9rem;color:var(--fg);font-family:'Rajdhani',sans-serif;font-size:.95rem;outline:none}
+.search:focus{border-color:var(--teal-dim)}
+.pchip{
+  font-family:'Orbitron',monospace;font-size:.64rem;font-weight:700;letter-spacing:.18em;
+  padding:.55rem 1.1rem;border-radius:999px;cursor:pointer;transition:all .18s;
+  background:rgba(255,255,255,.03);border:1px solid var(--border);color:#9aa8bd;
+}
+.pchip:hover{border-color:rgba(31,200,169,.45);color:#dfe7f2}
+.pchip.active{background:#0d1424;border-color:rgba(31,200,169,.65);color:#fff;box-shadow:0 0 14px rgba(31,200,169,.18)}
+.provbar{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem}
+.prov-tag{position:absolute;top:.55rem;left:.55rem;font-family:Orbitron,monospace;font-size:.52rem;
+  letter-spacing:.14em;font-weight:700;padding:.22rem .5rem;border-radius:.35rem;
+  background:rgba(0,0,0,.66);border:1px solid rgba(255,255,255,.14);color:#c9d4e3;z-index:3}
+.prov-tag.prag{border-color:rgba(245,179,1,.5);color:#f5b301}
+.count-note{font-size:.85rem;color:var(--muted)}
+#tables{display:grid;gap:1rem;grid-template-columns:repeat(4,1fr)}
+@media(max-width:1100px){#tables{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:820px){#tables{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){#tables{grid-template-columns:1fr}}
+.tcard{
+  position:relative;border-radius:.9rem;overflow:hidden;cursor:pointer;
+  background:#0a0f1c;border:1px solid rgba(255,255,255,.09);
+  box-shadow:0 10px 30px rgba(0,0,0,.55);
+  transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;
+  min-height:300px;display:flex;flex-direction:column;
+  transform:translateZ(0);          /* keep hover animation on its own layer */
+  backface-visibility:hidden;
+  isolation:isolate;
+}
+.tcard:hover{transform:translateY(-3px);border-color:rgba(245,179,1,.35);box-shadow:0 14px 40px rgba(0,0,0,.65),0 0 20px rgba(245,179,1,.12)}
+.tbg{position:absolute;inset:0;background-size:cover;background-position:center;filter:saturate(1.1)}
+.tcard::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.15) 0%,rgba(0,0,0,.25) 35%,rgba(0,0,0,.88) 78%,rgba(0,0,0,.95) 100%)}
+.live-badge{position:absolute;top:.7rem;right:.7rem;z-index:3;display:inline-flex;align-items:center;gap:.4rem;
+  font-family:'Orbitron',monospace;font-size:.6rem;letter-spacing:.18em;color:var(--teal);
+  background:rgba(0,0,0,.78);border:1px solid rgba(31,200,169,.35);padding:.32rem .65rem;border-radius:999px}
+.live-badge i{width:7px;height:7px;border-radius:50%;background:#00e6a0;box-shadow:0 0 8px #00e6a0;animation:blink 1.2s infinite}
+.tcontent{position:relative;z-index:2;margin-top:auto;padding:.9rem .9rem .8rem}
+.tname{font-weight:700;font-size:1.05rem;letter-spacing:.01em;margin-bottom:.55rem;text-shadow:0 2px 10px rgba(0,0,0,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nums-box{background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.08);border-radius:.6rem;padding:.55rem .6rem;
+  display:flex;flex-wrap:wrap;gap:.15rem .55rem;min-height:56px}
+.nums-box span{font-family:'Orbitron',monospace;font-size:.78rem;font-weight:700;padding:.12rem .2rem;border-radius:.3rem;line-height:1.5}
+.nums-box span.first{background:rgba(245,179,1,.16);box-shadow:0 0 10px rgba(245,179,1,.25);border:1px solid rgba(245,179,1,.25);transform:scale(1.08)}
+.card-best{display:flex;align-items:center;gap:.3rem;flex-wrap:wrap;margin-bottom:.5rem;font-family:'Orbitron',monospace;font-size:.54rem;letter-spacing:.08em}
+.cb-k{background:rgba(31,200,169,.14);border:1px solid rgba(31,200,169,.3);color:var(--teal);padding:.08rem .28rem;border-radius:.25rem}
+.cb-v{font-size:.72rem}
+.cb-n{color:var(--muted)}
+.cb-wl{display:flex;gap:1px}
+.cb-wl i{font-style:normal;padding:.04rem .16rem;border-radius:.15rem;font-weight:700}
+.cb-wl i.w{background:rgba(34,197,94,.2);color:#86efac}
+.cb-wl i.l{background:rgba(255,77,94,.18);color:#ff8f9a}
+.tcard .bottom-line{position:absolute;bottom:0;left:0;right:0;height:2px;z-index:3;
+  background:linear-gradient(90deg,transparent,rgba(245,179,1,.7),rgba(31,200,169,.6),transparent)}
+.dealer{position:absolute;top:.7rem;left:.7rem;z-index:3;font-size:.72rem;color:#cbd5e1;background:rgba(0,0,0,.5);
+  border:1px solid rgba(255,255,255,.1);padding:.2rem .55rem;border-radius:999px;display:none}
+/* detail */
+#backBtn{display:none;margin-bottom:1rem;font-family:'Orbitron',monospace;font-size:.65rem;letter-spacing:.2em;
+  background:rgba(31,200,169,.06);border:1px solid rgba(31,200,169,.3);color:var(--teal);
+  padding:.55rem .9rem;border-radius:.5rem;cursor:pointer}
+#backBtn:hover{background:rgba(31,200,169,.14)}
+#detail{display:none;gap:1.2rem;align-items:start}
+#detail.active{display:block}
+.dgrid{display:grid;grid-template-columns:340px 1fr;gap:1.2rem;align-items:start;margin-top:1rem}
+@media(max-width:900px){.dgrid{grid-template-columns:1fr}}
+.dleft{display:flex;flex-direction:column;gap:1rem}
+.dcard{position:relative;border-radius:.9rem;overflow:hidden;border:1px solid rgba(255,255,255,.1);min-height:320px;background:#0a0f1c}
+.dcard .tbg{position:absolute;inset:0}
+.dcard::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.1),rgba(0,0,0,.85))}
+.panel{background:linear-gradient(135deg,rgba(17,26,44,.92),rgba(8,13,26,.9));border:1px solid var(--border);border-radius:.9rem;
+  padding:1rem 1.1rem;box-shadow:0 8px 30px rgba(0,0,0,.5);position:relative;overflow:hidden}
+.panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(31,200,169,.5),transparent)}
+.panel.gold::before{background:linear-gradient(90deg,transparent,rgba(245,179,1,.55),transparent)}
+.panel h3{font-family:'Orbitron',monospace;font-size:.68rem;letter-spacing:.25em;margin-bottom:.9rem;display:flex;align-items:center;gap:.5rem}
+.panel h3.teal{color:var(--teal)} .panel h3.gold{color:var(--primary)}
+.circles{display:flex;flex-wrap:wrap;gap:.6rem}
+.num-circle{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-family:'Orbitron',monospace;font-weight:800;font-size:.82rem;animation:pop .3s ease both}
+.num-circle.latest{width:50px;height:50px;border:2px solid rgba(245,179,1,.7)!important;transform:scale(1.12);box-shadow:0 0 16px rgba(245,179,1,.35)}
+@keyframes pop{0%{transform:scale(.5);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+.lock-wrap{text-align:center;padding:1.2rem .5rem}
+.lock-icon{width:64px;height:64px;margin:0 auto .9rem;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;
+  background:rgba(245,179,1,.08);border:1px solid rgba(245,179,1,.3)}
+.lock-text{color:#9fb3c8;margin-bottom:.6rem}
+.contact-link{color:var(--teal);font-weight:700;letter-spacing:.05em;cursor:pointer}
+.stats-row{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.9rem}
+.stat-chip{flex:1;min-width:90px;background:rgba(0,0,0,.35);border:1px solid var(--border);border-radius:.6rem;padding:.6rem;text-align:center}
+.stat-chip b{display:block;font-family:'Orbitron',monospace;font-size:1.05rem}
+.stat-chip small{color:var(--muted);letter-spacing:.12em;font-size:.62rem;font-family:'Orbitron',monospace}
+.big-last{display:flex;align-items:center;gap:1rem;margin-bottom:1rem;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:.7rem;padding:.7rem .9rem}
+.big-ball{width:62px;height:62px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-family:'Orbitron',monospace;font-weight:900;font-size:1.3rem;flex-shrink:0}
+#loading{text-align:center;color:var(--muted);padding:3rem 1rem;font-family:'Orbitron',monospace;letter-spacing:.15em;font-size:.75rem}
+.foot{margin-top:2.5rem;text-align:center;color:var(--muted);font-size:.8rem}
+.err-box{display:none;background:rgba(255,77,94,.08);border:1px solid rgba(255,77,94,.3);border-radius:.7rem;padding:.8rem 1rem;margin-bottom:1rem;font-size:.9rem}
+/* ===== prediction engine ===== */
+.pctl{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-bottom:.7rem}
+.pctl select,.pctl button{background:#0a1120;border:1px solid var(--border);color:var(--fg);border-radius:.45rem;
+  padding:.35rem .5rem;font-family:'Rajdhani',sans-serif;font-size:.85rem;cursor:pointer}
+.pctl button:hover{border-color:var(--teal-dim);color:var(--teal)}
+#manualBox{margin-bottom:.7rem}
+#manualBox button{background:#0a1120;border:1px solid var(--border);color:var(--fg);border-radius:.45rem;
+  padding:.35rem .6rem;font-family:'Rajdhani',sans-serif;font-size:.85rem;cursor:pointer;margin-right:.35rem}
+#manualBox button:hover{border-color:var(--teal-dim);color:var(--teal)}
+#manualNums{width:100%;min-height:52px;background:#0a1120;border:1px solid var(--border);border-radius:.5rem;
+  color:var(--fg);padding:.5rem;font-family:'Rajdhani',sans-serif;font-size:.9rem;margin-bottom:.4rem;resize:vertical}
+#topbet{margin-bottom:.8rem}
+.tbet{display:flex;gap:.8rem;align-items:center;background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.3);
+  border-radius:.7rem;padding:.7rem .8rem;flex-wrap:wrap}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+@media(max-width:760px){.pgrid{grid-template-columns:1fr}}
+.pcard{background:rgba(0,0,0,.32);border:1px solid var(--border);border-radius:.7rem;padding:.6rem .7rem}
+.pcard h4{font-family:'Orbitron',monospace;font-size:.6rem;letter-spacing:.18em;color:var(--teal);
+  display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-bottom:.5rem}
+.pcard h4 .pscore{color:var(--primary)}
+.pnums{display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:.45rem}
+.pnum{width:36px;height:36px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;gap:1px;
+  font-family:'Orbitron',monospace;font-weight:800;font-size:.78rem;border:1px solid rgba(255,255,255,.1)}
+.pnum i{font-style:normal;font-size:.44rem;opacity:.7}
+.pnum.fill{opacity:.7;border-style:dashed!important}
+.prow{display:flex;justify-content:space-between;gap:.6rem;font-size:.8rem;padding:.28rem .4rem;border-radius:.4rem;
+  background:rgba(255,255,255,.03);margin-bottom:.22rem}
+.prow b{font-family:'Orbitron',monospace;font-size:.66rem;letter-spacing:.03em;color:#cbd5e1;text-align:right}
+.prow.best{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3)}
+.pcard.starred{border-color:rgba(34,197,94,.4);box-shadow:0 0 18px rgba(34,197,94,.08)}
+.pcard.starred h4::before{content:'★ ';color:var(--green)}
+.pmeta{display:flex;gap:.3rem;flex-wrap:wrap;margin:.4rem 0 .3rem}
+.pmeta span{font-family:'Orbitron',monospace;font-size:.56rem;letter-spacing:.08em;background:rgba(255,255,255,.05);
+  border:1px solid var(--border);padding:.2rem .38rem;border-radius:.35rem;color:#9fb3c8}
+.pnote{font-size:.78rem;color:var(--muted);line-height:1.3}
+.plabel{display:flex;gap:.2rem;flex-wrap:wrap;align-items:center;margin-bottom:.4rem}
+.wl-dir{font-family:'Orbitron',monospace;font-size:.46rem;letter-spacing:.06em;color:var(--muted);opacity:.8}
+.wl{font-family:'Orbitron',monospace;font-size:.58rem;font-weight:700;padding:.13rem .28rem;border-radius:.25rem}
+.wl.W{background:rgba(34,197,94,.18);color:#86efac}
+.wl.L{background:rgba(255,77,94,.16);color:#ff8f9a}
+.tsvg{width:100%;height:46px;display:block;margin:.25rem 0}
+.tsvg polyline{fill:none;stroke:#1fc8a9;stroke-width:1.5}
+.tsvg .tref{stroke:#f5b301;stroke-width:1;stroke-dasharray:4 3;opacity:.85}
+.tsvg .tdot{fill:#f5b301}
+.pempty{color:var(--muted);font-size:.9rem;padding:.5rem}
+.pfoot{font-size:.72rem;color:var(--muted);margin-top:.65rem;line-height:1.35}
+/* ---------- French racetrack (tableau) ---------- */
+.tracksvg{width:100%;max-width:940px;height:auto;display:block;margin:0 auto;filter:drop-shadow(0 6px 18px rgba(0,0,0,.55))}
+.tracksvg text{user-select:none;font-family:'Orbitron',monospace}
+.viewtog{display:inline-flex;gap:.25rem;margin-left:auto}
+.viewtog button{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:.35rem;
+  padding:.18rem .45rem;font-family:'Orbitron',monospace;font-size:.5rem;letter-spacing:.08em;cursor:pointer}
+.viewtog button.on{color:var(--teal);border-color:var(--teal-dim);background:rgba(31,200,169,.1)}
+/* ---------- graphical European wheel (STYLES) ---------- */
+.wheelwrap{display:flex;gap:.9rem;align-items:center;flex-wrap:wrap;justify-content:center}
+.wheelsvg{width:300px;height:300px;flex:0 0 auto;display:block;margin:0 auto;filter:drop-shadow(0 6px 18px rgba(0,0,0,.55))}
+.wheelsvg text{user-select:none}
+.wlegend{display:flex;flex-direction:column;gap:.35rem;font-size:.82rem;min-width:190px}
+.wlegend-wide{margin-top:.6rem;flex-direction:row;flex-wrap:wrap;align-items:center;gap:1rem;min-width:0}
+.wlg{display:flex;align-items:center;gap:.45rem}
+.wlg i{width:12px;height:12px;border-radius:3px;display:inline-block;flex:0 0 auto}
+.wchiprow{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.2rem}
+.wchip{font-family:'Orbitron',monospace;font-size:.62rem;font-weight:700;padding:.2rem .38rem;border-radius:.3rem;border:1px solid rgba(255,255,255,.14)}
+/* lobby filter bar */
+.fbar{gap:.35rem;margin-bottom:.8rem}
+.fsel{flex:1;min-width:150px;max-width:260px;background:#0a1120;border:1px solid var(--border);border-radius:.5rem;
+  padding:.45rem .55rem;color:var(--fg);font-family:'Rajdhani',sans-serif;font-size:.9rem;outline:none;cursor:pointer}
+.fsel:focus{border-color:var(--teal-dim)}
+.fbtn{background:rgba(31,200,169,.06);border:1px solid rgba(31,200,169,.3);color:var(--teal);border-radius:.5rem;
+  padding:.45rem .8rem;font-family:'Rajdhani',sans-serif;font-size:.9rem;cursor:pointer}
+.fbtn:hover{background:rgba(31,200,169,.14)}
+/* strategy on/off chips */
+.stog-wrap{display:flex;gap:.35rem;flex-wrap:wrap;align-items:center;margin:.2rem 0 .8rem}
+.stog-wrap .lbl{font-family:'Orbitron',monospace;font-size:.55rem;letter-spacing:.16em;color:var(--muted);margin-right:.2rem}
+.stog{display:inline-flex;align-items:center;gap:.35rem;cursor:pointer;user-select:none;
+  background:rgba(255,255,255,.035);border:1px solid var(--border);border-radius:999px;padding:.28rem .55rem;
+  font-family:'Orbitron',monospace;font-size:.55rem;letter-spacing:.06em;color:#9fb3c8;transition:all .15s}
+.stog input{appearance:none;width:9px;height:9px;border-radius:50%;background:#334155;border:1px solid #475569;cursor:pointer;margin:0}
+.stog:has(input:checked){border-color:rgba(31,200,169,.45);color:var(--teal);background:rgba(31,200,169,.09)}
+.stog:has(input:checked) input{background:#1fc8a9;border-color:#1fc8a9;box-shadow:0 0 7px rgba(31,200,169,.7)}
+.stog:hover{border-color:rgba(245,179,1,.4)}
+.stog-tools{display:inline-flex;gap:.3rem;margin-left:auto}
+.stog-tools button{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:.35rem;
+  padding:.18rem .4rem;font-family:'Orbitron',monospace;font-size:.5rem;letter-spacing:.08em;cursor:pointer}
+.stog-tools button:hover{color:var(--teal);border-color:var(--teal-dim)}
+/* health + risk */
+.risk-banner{display:flex;gap:.55rem;align-items:flex-start;border-radius:.6rem;padding:.55rem .7rem;margin-bottom:.7rem;
+  font-size:.82rem;line-height:1.35;border:1px solid rgba(245,179,1,.3);background:rgba(245,179,1,.07);color:#fde68a}
+.risk-banner.bad{border-color:rgba(255,77,94,.4);background:rgba(255,77,94,.09);color:#ffb3ba}
+.risk-banner.good{border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.07);color:#bbf7d0}
+.risk-banner b{color:#fff}
+.conf-pill{display:inline-flex;align-items:center;gap:.3rem;font-family:'Orbitron',monospace;font-size:.52rem;
+  letter-spacing:.08em;padding:.18rem .42rem;border-radius:999px;border:1px solid var(--border);color:#cbd5e1}
+.conf-pill.good{color:#86efac;border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.1)}
+.conf-pill.ok{color:#fde68a;border-color:rgba(245,179,1,.35);background:rgba(245,179,1,.08)}
+.conf-pill.bad{color:#ff9aa4;border-color:rgba(255,77,94,.4);background:rgba(255,77,94,.1)}
+.conf-pill.warn{color:#93c5fd;border-color:rgba(59,130,246,.35);background:rgba(59,130,246,.08)}
+.feed-age{font-family:'Orbitron',monospace;font-size:.55rem;letter-spacing:.08em;color:var(--muted)}
+.feed-age.stale{color:#ff9aa4}
+.stale-badge{position:absolute;top:.7rem;left:.7rem;z-index:4;font-family:'Orbitron',monospace;font-size:.5rem;
+  letter-spacing:.1em;color:#ff9aa4;background:rgba(0,0,0,.6);border:1px solid rgba(255,77,94,.4);
+  padding:.2rem .45rem;border-radius:999px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="logo"><div class="logo-mark">🎡</div><div>LIVE ROULETTE<small>LIVE TRACKER</small></div></div>
+    <div class="status-pill"><span id="statusDot" class="dot conn"></span><span id="statusText">CONNECTING…</span></div>
+    <button id="refreshBtn" class="fbtn" title="Force reconnect to the live feed">↻ Refresh feed</button>
+    <span id="feedAge" class="feed-age">waiting…</span>
+    <div class="hstats">
+      <div class="hstat" title="Continuous W/L across all active roulette tables">ALL TABLES W/L <b id="allTablesWL">0W / 0L (–)</b></div>
+      <div class="hstat gold" title="Continuous live recorded W/L across all tables">LIVE W/L <b id="liveSessionWL">0W / 0L</b></div>
+      <div class="hstat">USERS <b id="onlineCount">–</b></div>
+      <div class="hstat gold">SPINS TRACKED <b id="predCount">–</b></div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div id="backWrap"><button id="backBtn">← BACK TO TABLES</button></div>
+  <div class="err-box" id="errBox"></div>
+
+  <div id="lobbyView">
+    <div class="divider"><div class="line"></div><div>▼ SELECT A TABLE ▼</div><div class="line"></div></div>
+    <div class="controls">
+      <input id="search" class="search" placeholder="Search table… (e.g. Lightning, VIP, Speed)" />
+      <span class="count-note" id="countNote"></span>
+    </div>
+    <div class="provbar">
+      <button class="pchip active" data-p="all">ALL</button>
+      <button class="pchip" data-p="Evolution">EVOLUTION</button>
+      <button class="pchip" data-p="Pragmatic Play">PRAGMATIC PLAY</button>
+    </div>
+    <div class="controls fbar">
+      <select id="fSort" class="fsel">
+        <option value="acc">Sort: Best accuracy</option>
+        <option value="accLow">Sort: Worst accuracy</option>
+        <option value="edge">Sort: Biggest edge</option>
+        <option value="spins">Sort: Most spins</option>
+        <option value="active">Sort: Most recent spin</option>
+        <option value="name">Sort: Name A-Z</option>
+      </select>
+      <select id="fAcc" class="fsel">
+        <option value="all">Accuracy: all tables</option>
+        <option value="high">Only high accuracy (edge ≥ +8%)</option>
+        <option value="low">Only low accuracy (edge &lt; +8%)</option>
+        <option value="pos">Only positive edge</option>
+        <option value="neg">Only no edge / losing</option>
+      </select>
+      <select id="fStrat" class="fsel">
+        <option value="all">Best strategy: all</option>
+        <option value="OFFSET">Best is Offset</option>
+        <option value="TARGET">Best is Target</option>
+        <option value="SIGNATURE">Best is Signature</option>
+        <option value="COMBO">Best is Combo</option>
+        <option value="PRIV1">Best is Private 1 (last + neighbours)</option>
+        <option value="PRIV2">Best is Private 2 (opposite + neighbours)</option>
+        <option value="PRIV3">Best is Private 3 (last 9 + opposite 9)</option>
+        <option value="MARKOV">Best is Markov Sector Flow</option>
+      </select>
+      <select id="fMin" class="fsel">
+        <option value="0">Spins: any</option>
+        <option value="30">30+ spins</option>
+        <option value="60">60+ spins</option>
+        <option value="100">100+ spins</option>
+      </select>
+      <button id="fReset" class="fbtn">Reset</button>
+    </div>
+    <div id="loading">CONNECTING TO LIVE FEED — http://54.38.159.96 …</div>
+    <div id="tables"></div>
+    <div class="foot">Last spin is always <b style="color:var(--primary)">first</b> (gold highlighted) • recent → old • auto-updates live</div>
+  </div>
+
+  <div id="detail">
+    <div class="panel gold" id="chartPanel">
+      <h3 class="gold">🎯 PREDICTION ON THE WHEEL
+        <span class="viewtog"><button id="viewTrack" class="on" type="button">RACETRACK</button><button id="viewWheel" type="button">CIRCLE</button></span>
+      </h3>
+      <div id="wheelChart"></div>
+      <div class="wlegend wlegend-wide" id="wheelLegend"></div>
+      <div class="pnote" style="margin-top:.5rem">The <b>18 lit pockets</b> are exactly what you bet · the two <b>gold-outlined</b> cells are the two n9 centres · the <b>dashed white</b> cell is the last spin.</div>
+    </div>
+    <div class="dgrid">
+    <div class="dleft">
+      <div class="dcard" id="detailCard"></div>
+      <div class="panel gold">
+        <h3 class="gold">● TOP BET NOW</h3>
+        <div id="topbetMini"><div class="lock-icon">🎯</div><div class="lock-text">Waiting for spins…</div></div>
+      </div>
+      <div class="panel">
+        <h3 class="teal">● TABLE STATS (LAST 30)</h3>
+        <div class="stats-row">
+          <div class="stat-chip"><b id="stRed" style="color:var(--red)">0</b><small>RED</small></div>
+          <div class="stat-chip"><b id="stBlack" style="color:#fff">0</b><small>BLACK</small></div>
+          <div class="stat-chip"><b id="stGreen" style="color:var(--green)">0</b><small>ZERO</small></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="panel gold">
+        <h3 class="gold">● PREDICTION ENGINE <span id="predTag" style="color:#9fb3c8;letter-spacing:.08em"></span></h3>
+        <div class="pctl">
+          <select id="wheelSel" disabled title="Your feed is European-single-zero only — the wheel is locked." style="opacity:.85;cursor:not-allowed"><option value="eu" selected>Wheel: European (0) · LOCKED</option></select>
+          <select id="oppSel" title="How 'opposite number' is calculated for Private 2 and 3">
+            <option value="board">Opposite: Board (14↔6)</option>
+            <option value="wheel">Opposite: Wheel (14↔25)</option>
+          </select>
+          <select id="depthSel">
+            <option value="40">Depth: 40 spins</option><option value="90">Depth: 90 spins</option>
+            <option value="120" selected>Depth: 120 spins</option><option value="200">Depth: 200 spins</option>
+          </select>
+          <button id="selfTestBtn" title="Verify every W/L result against the exact bet placed">🧪 SELF-TEST</button>
+          <span id="buildBadge" style="font-family:Orbitron,monospace;font-size:.5rem;letter-spacing:.08em;color:#22c55e;border:1px solid rgba(34,197,94,.4);background:rgba(34,197,94,.08);padding:.2rem .4rem;border-radius:999px">BUILD 21 · CONTINUOUS ALL-TABLE W/L + 8 ADAPTIVE STRATEGIES</span>
+          <select id="ruleSel">
+            <option value="auto">Rule: Recommended</option><option value="lo">Rule: Lowest distance</option>
+            <option value="hi">Rule: Highest distance</option><option value="onlyP">Only (+)</option>
+            <option value="onlyM">Only (−)</option><option value="onlyJ">Only travel/jump</option>
+          </select>
+          <button id="manualBtn">⌨ Manual spins</button>
+        </div>
+        <div class="stog-wrap" id="stratToggles">
+          <span class="lbl">STRATEGIES</span>
+          <span class="stog-tools"><button id="stAll" type="button">ALL ON</button><button id="stNone" type="button">ALL OFF</button></span>
+        </div>
+        <div id="riskBanner"></div>
+        <div id="manualBox" style="display:none">
+          <textarea id="manualNums" placeholder="Paste this table's spins, newest first — e.g. 12 5 0 33 8 21 … (00 allowed)"></textarea>
+          <button id="manualApply">▶ Use these spins</button><button id="manualClear">↩ Back to live data</button>
+        </div>
+        <div id="topbet"></div>
+        <div class="pgrid" id="predBody"></div>
+        <div class="pfoot">
+          <b>n9</b> = the number + the <b>4 pockets on each side</b> = 9 pockets. There is <b>only n9</b> — every prediction is
+          <b>two numbers, 9 pockets each = exactly 18 pockets</b>, e.g. <b>26n9 32n9</b>.
+          The two centres are always at least <b>9 pockets apart on the wheel</b>, so the two arcs never overlap — that is what keeps the bet at
+          exactly 18 distinct numbers instead of collapsing into one arc.
+          <b>PRIV 1</b> = n9 around the last spin + n9 far away. <b>PRIV 2</b> = n9 around the opposite of the last spin + n9 far away.
+          <b>PRIV 3</b> = n9 on the last spin + n9 on its opposite (board mirror, e.g. 14↔6).
+          <b>MARKOV (Strategy 8)</b> = 1st &amp; 2nd order pocket-to-sector Markov transition probability + wheel step flow.
+          A win = the ball lands inside the 18 covered pockets. Every table's W/L is tracked continuously across all spins.
+        </div>
+      </div>
+      <div class="panel" style="margin-top:1rem">
+        <h3 class="gold">📐 ACCURACY &amp; MATH</h3>
+        <div class="stats-row" id="accRow"></div>
+        <div class="pnote" id="accNote" style="margin-top:.6rem"></div>
+      </div>
+      <div class="panel" style="margin-top:1rem">
+        <h3 class="teal">🃏 RECENT SPINS <span id="dTableName" style="color:#fff;margin-left:.4rem"></span></h3>
+        <div class="big-last"><div class="big-ball" id="bigBall">–</div>
+          <div><div style="font-family:Orbitron;font-size:.62rem;letter-spacing:.2em;color:var(--muted)">LAST SPIN</div>
+          <div id="bigMeta" style="font-size:1rem;font-weight:700">Waiting for data…</div>
+          <div id="bigTime" style="font-size:.8rem;color:var(--muted)"></div></div>
+        </div>
+        <div class="circles" id="detailNumbers"></div>
+      </div>
+      <div class="panel" style="margin-top:1rem">
+        <h3 class="teal">● SPIN HISTORY (NEWEST FIRST)</h3>
+        <div id="historyList" style="display:flex;flex-wrap:wrap;gap:.4rem"></div>
+      </div>
+      <div class="panel" style="margin-top:1rem">
+        <h3 class="teal">✅ W/L — ONE METHOD
+          <span id="wlVerifyNote" style="color:#9fb3c8;letter-spacing:.04em;font-size:.55rem;margin-left:auto"></span></h3>
+        <div id="wlVerify"></div>
+        <div class="pfoot"><b>Win = the spin is inside one of the two n9 arcs.</b> Example: bet <b>7n9 19n9</b> covers
+        9,22,18,29,7,28,12,35,3 and 25,2,21,4,19,15,32,0,26 → spin <b>12</b> is in the list → <b style="color:var(--green)">WIN</b>.
+        A number not in the list is a <b style="color:var(--red)">LOSS</b>. Every row prints the full covered list so you can check it yourself.</div>
+      </div>
+    </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+/* WebSocket is NOT subject to CORS — only XHR/polling is. The API accepts a
+   WebSocket handshake from ANY origin (file://, localhost, anything), so this
+   file works opened directly from disk. No server, no proxy required. */
+const BACKEND = 'https://roulette.tools:3000';
+const LOCAL = location.protocol === 'file:' ||
+              /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(location.hostname);
+const VIA_PROXY = false;
+const REDS = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+const MAX_CARD = 12, MAX_DETAIL = 30;
+const WL_SHOW = 10;       // compact visual strip length
+const MAX_JOURNAL = 500;  // continuous recorded history per table/strategy (never capped at 10)
+/* The feed order is auto-detected per table: some endpoints push the newest spin
+   at index 0, others append it at the end. Guessing wrong makes every W/L wrong. */
+const ORDER={};   // id -> {dir:'newest'|'oldest', prev:[], votes:{newest:0,oldest:0}}
+function normaliseFeed(id,nums){
+  if(!Array.isArray(nums)) return nums;
+  let st=ORDER[id];
+  if(!st){ st=ORDER[id]={dir:null,prev:[],votes:{newest:0,oldest:0}}; }
+  const prev=st.prev;
+  if(prev.length>=3 && nums.length>=3){
+    // newest-first: the previous head shifts to slot 1 and slot 2
+    if(nums[1]===prev[0] && nums[2]===prev[1])                 st.votes.newest+=2;
+    // oldest-first: the previous tail moves to second-to-last
+    else if(nums[nums.length-2]===prev[prev.length-1] && nums[nums.length-3]===prev[prev.length-2]) st.votes.oldest+=2;
+  }
+  st.prev=nums.slice(0,3).concat(nums.slice(-3));
+  // never lock a default: stay undecided (treated as newest) until the evidence is clear
+  if(st.dir===null){
+    if(st.votes.oldest>=2 && st.votes.oldest>st.votes.newest) st.dir='oldest';
+    else if(st.votes.newest>=2 && st.votes.newest>st.votes.oldest) st.dir='newest';
+  }
+  return st.dir==='oldest' ? nums.slice().reverse() : nums;
+}
+function feedOrderOf(id){ const st=ORDER[id]; return st&&st.dir?st.dir:'newest-first'; }
+
+/* Accumulate spins continuously so Evolution (30-spin feed window) and Pragmatic
+   (20-spin feed window) grow up to 260 spins instead of overwriting history. */
+function mergeSpins(existing, incoming){
+  if(!Array.isArray(incoming) || !incoming.length) return existing || [];
+  if(!Array.isArray(existing) || existing.length < 4) return incoming.slice(0, 260);
+  const checkLen = Math.min(5, existing.length, incoming.length);
+  for(let shift=0; shift<=Math.min(12, incoming.length - checkLen); shift++){
+    let match = true;
+    for(let j=0; j<checkLen; j++){
+      if(incoming[shift+j] !== existing[j]){ match = false; break; }
+    }
+    if(match){
+      if(shift === 0) return existing.length >= incoming.length ? existing : incoming.slice(0, 260);
+      return incoming.slice(0, shift).concat(existing).slice(0, 260);
+    }
+  }
+  return incoming.slice(0, 260);
+}
+function detectNewSpinShift(prevNums, newNums){
+  if(!Array.isArray(prevNums) || prevNums.length < 4 || !Array.isArray(newNums) || newNums.length < 4) return 0;
+  const checkLen = Math.min(5, prevNums.length, newNums.length - 1);
+  if(checkLen < 3) return 0;
+  for(let shift=0; shift<=Math.min(8, newNums.length - checkLen); shift++){
+    let match = true;
+    for(let j=0; j<checkLen; j++){
+      if(newNums[shift+j] !== prevNums[j]){ match = false; break; }
+    }
+    if(match) return shift;
+  }
+  return (newNums[0] !== prevNums[0] && newNums[1] === prevNums[0]) ? 1 : 0;
+}
+
+const PROV = { filter:'all' };
+function provOf(id){
+  const t = state.tables[id];
+  if(t && t.provider) return t.provider;
+  return (id.indexOf('pragmatic_')===0) ? 'Pragmatic Play' : 'Evolution';
+}
+const state = {
+  configs: {},      // id -> {title, gt}
+  thumbs: {},       // id -> stream
+  templateBase: 'https://bshots.ljydwiwtx.click/thumbnail/',
+  tables: {},       // id -> {name, img, numbers:[latestFirst], updatedAt, dealer}
+  selected: null,
+  connected: false,
+};
+
+function numColor(n){ if(n===0||n===37) return '#22c55e'; if(REDS.has(n)) return '#ff4d5e'; return '#f1f5f9'; }
+function numBg(n){ if(n===0||n===37) return 'rgba(34,197,94,.16)'; if(REDS.has(n)) return 'rgba(255,77,94,.14)'; return 'rgba(148,163,184,.12)'; }
+function numBorder(n){ if(n===0||n===37) return '1px solid rgba(34,197,94,.35)'; if(REDS.has(n)) return '1px solid rgba(255,77,94,.3)'; return '1px solid rgba(255,255,255,.1)'; }
+function prettyId(id){ return id.replace(/([A-Z])/g,' $1').replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim().replace(/^./,c=>c.toUpperCase()); }
+
+/* Universal roulette parser. Server sends latest FIRST — we never reverse.
+   0-36 are normal pockets; 37 represents 00 (American wheel). */
+function toRouletteNumber(v){
+  if(v===null || v===undefined || v==='') return null;
+  if(typeof v==='string'){
+    const s=v.trim();
+    if(s==='00') return 37;
+    if(s==='') return null;
+  }
+  const n=Number(v);
+  if(!Number.isFinite(n)) return null;
+  if(n<0 || n>37) return null;
+  return Math.trunc(n);
+}
+function parseRouletteResults(results){
+  const out = [];
+  if(!Array.isArray(results)) return out;
+  const add=v=>{ const n=toRouletteNumber(v); if(n!==null) out.push(n); };
+  for(const e of results){
+    if(Array.isArray(e)){
+      for(const sub of e){
+        if(sub && typeof sub === 'object' && sub.number !== undefined && sub.number !== null && sub.number !== ''){
+          add(sub.number);
+        } else if(typeof sub === 'number' || typeof sub === 'string'){ add(sub); }
+      }
+    } else if(e && typeof e === 'object' && e.number !== undefined && e.number !== null && e.number !== ''){
+      add(e.number);
+    } else if(typeof e === 'number' || typeof e === 'string'){
+      add(e);
+    }
+  }
+  return out;
+}
+function isRouletteNumbers(arr){ return arr.length>=3 && arr.every(n=>Number.isInteger(n)&&n>=0&&n<=37); }
+
+/* Race track / horse racing / other casino games must never reach the prediction engine. */
+const NON_ROULETTE_WORDS=[
+  'race track','racetrack','horse race','horse racing','horse','keno','baccarat','blackjack','poker',
+  'sic bo','sicbo','craps','dice','dream catcher','monopoly','crazy time','cash hunt','coin flip',
+  'pachinko','plinko','mines','tower','crash','aviator','andar bahar','teen patti','lucky wheel',
+  'money wheel','big wheel','penalty','spaceman','jetx','hi-lo','dragon tiger','fan tan','lottery',
+  'bingo','mega ball','lotto','rock paper scissors','color game','red dog','three card','holdem',
+  "hold'em",'texas','caribbean','let it ride','chuck-a-luck','golden boot','goal','race'
+];
+function isRouletteTable(id){
+  if(!id) return false;
+  const cfg=state.configs[id];
+  // 1) explicit game type from the feed wins
+  if(cfg && cfg.gt){
+    const gt=String(cfg.gt).toLowerCase();
+    if(gt.indexOf('american')>=0) return false;      // European feed only
+    if(gt.indexOf('roulette')>=0) return true;        // roulette, reddoorroulette, monopolyroulette…
+    return false;
+  }
+  const t=state.tables[id];
+  const label=((t&&t.name)||'')+' '+((cfg&&cfg.title)||'')+' '+id;
+  const low=label.toLowerCase();
+  // 2) hard block: race track / horse racing / any non-roulette game, checked FIRST
+  for(const w of NON_ROULETTE_WORDS) if(low.indexOf(w)>=0) return false;
+  // 3) only then allow by name or by demo/roulette id
+  if(low.indexOf('roulette')>=0) return true;
+  if(id.indexOf('demo_')===0) return true;
+  if(id.indexOf('roulette')>=0) return true;
+  return false;
+}
+
+function ensureTable(id){
+  if(!state.tables[id]) state.tables[id] = { name: prettyId(id.replace(/^pragmatic_/,'')), img:'', numbers:[], updatedAt:0, dealer:'' };
+  return state.tables[id];
+}
+function tableDisplayName(id){
+  const t = state.tables[id]; if(!t) return prettyId(id);
+  return t.name || prettyId(id);
+}
+function tableImg(id){
+  const t = state.tables[id];
+  if(t && t.img) return t.img;
+  return '';
+}
+
+/* ---------- rendering ---------- */
+const tablesEl = document.getElementById('tables');
+const loadingEl = document.getElementById('loading');
+const countNote = document.getElementById('countNote');
+
+function cardNumbersHTML(nums){
+  const show = nums.slice(0, MAX_CARD);
+  if(!show.length) return '<span style="color:#7d8aa0">Waiting…</span>';
+  return show.map((n,i)=>`<span class="${i===0?'first':''}" style="color:${numColor(n)}">${dsp(n)}</span>`).join('');
+}
+/* best strategy win ratio + continuous W/L counter + short W/L pattern for the lobby card */
+function cardBestInner(st, id){
+  if(!st) return '<span class="cb-n">…</span>';
+  const col = hitCol(st.cur,st.cov||0.4865);
+  const wl = st.wl.slice(0,WL_SHOW).map((c,i)=>'<i class="'+(c==='W'?'w':'l')+'" title="spin '+(st.wlSpin&&st.wlSpin[i]!==undefined?dsp(st.wlSpin[i]):'?')+' → '+c+'">'+c+'</i>').join('');
+  const bet = st.picks&&st.picks.length?st.picks.map(p=>dsp(p.n)+'n'+(2*p.r+1)).join(' '):'';
+  const totW = st.totalW!==undefined ? st.totalW : st.wl.filter(x=>x==='W').length;
+  const totL = st.totalL!==undefined ? st.totalL : (st.wl.length - totW);
+  return '<span class="cb-k">BEST '+st.k+'</span><span class="cb-v" style="color:'+col+'">'+Math.round(st.cur*100)+
+    '%</span><span class="cb-n">('+totW+'W/'+totL+'L) '+bet+'</span><span class="cb-wl">'+wl+'</span>';
+}
+function cardBestHTML(id){
+  let c=null;
+  try{ c=LOBBY.stats[id]; }catch(e){}
+  return cardBestInner(c?c.st:null, id);
+}
+/* chunked so the first paint is never blocked */
+const LOBBY_Q={ids:[],i:0,on:false,raf:0};
+function scheduleLobbyStats(ids){
+  LOBBY_Q.ids=ids; LOBBY_Q.i=0;
+  if(LOBBY_Q.on) return;
+  LOBBY_Q.on=true; LOBBY_Q.raf=requestAnimationFrame(lobbyStep);
+}
+function lobbyStep(){
+  const t0=performance.now();
+  while(LOBBY_Q.i<LOBBY_Q.ids.length && performance.now()-t0<8){
+    const id=LOBBY_Q.ids[LOBBY_Q.i++];
+    let st=null;
+    try{ st=lobbyCached(id); }catch(e){}
+    const el=document.querySelector('.tcard[data-id="'+id+'"] .card-best');
+    if(el) el.innerHTML=cardBestInner(st, id);
+  }
+  if(LOBBY_Q.i<LOBBY_Q.ids.length) LOBBY_Q.raf=requestAnimationFrame(lobbyStep);
+  else{
+    LOBBY_Q.on=false;
+    updateGlobalWLHeader();
+    if(LOBBY.fresh){ LOBBY.fresh=false; renderLobby(); }   // stats arrived -> re-sort / re-filter
+  }
+}
+
+/* ---------- lobby filters ---------- */
+function fGet(id){ const el=document.getElementById(id); return el?el.value:'all'; }
+function applyFilters(ids){
+  const acc=fGet('fAcc'), strat=fGet('fStrat'), min=Number(fGet('fMin')||0), sort=fGet('fSort');
+  const q=(document.getElementById('search').value||'').toLowerCase();
+  const rows=ids.filter(id=>{
+    const t=state.tables[id];
+    if(!t.numbers||!t.numbers.length) return false;
+    if(q && !(tableDisplayName(id).toLowerCase().includes(q)||id.toLowerCase().includes(q))) return false;
+    if(min && t.numbers.filter(n=>Number.isInteger(n)&&n>=0&&n<=36).length<min) return false;
+    const c=LOBBY.stats[id];
+    const st=c?c.st:null;
+    if(strat!=='all' && (!st||st.k!==strat)) return false;
+    if(st){
+      const e=st.edge!==undefined?st.edge:(st.cur-st.cov);
+      if(acc==='high' && e<0.08) return false;
+      if(acc==='low' && e>=0.08) return false;
+      if(acc==='pos' && e<=0) return false;
+      if(acc==='neg' && e>0) return false;
+    } else if(acc!=='all'||strat!=='all') return false;
+    return true;
+  });
+  rows.sort((a,b)=>{
+    const ta=state.tables[a], tb=state.tables[b];
+    const sa=LOBBY.stats[a], sb=LOBBY.stats[b];
+    const ea=sa?sa.st:null;
+    const eb=sb?sb.st:null;
+    if(sort==='acc') return (eb?eb.cur:-1)-(ea?ea.cur:-1);
+    if(sort==='accLow') return (ea?ea.cur:2)-(eb?eb.cur:2);
+    if(sort==='edge'){const x=ea?ea.edge:-2,y=eb?eb.edge:-2;return y-x || tableDisplayName(a).localeCompare(tableDisplayName(b));}
+    if(sort==='spins') return tb.numbers.length-ta.numbers.length;
+    if(sort==='active') return (tb.updatedAt||0)-(ta.updatedAt||0);
+    return tableDisplayName(a).toLowerCase().localeCompare(tableDisplayName(b).toLowerCase());
+  });
+  return rows;
+}
+function wireFilters(){
+  ['fSort','fAcc','fStrat','fMin','search'].forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.addEventListener(el.tagName==='INPUT'?'input':'change',()=>{renderLobby();});
+  });
+  const r=document.getElementById('fReset'); if(r) r.onclick=()=>{
+    document.getElementById('fSort').value='acc';
+    document.getElementById('fAcc').value='all';
+    document.getElementById('fStrat').value='all';
+    document.getElementById('fMin').value='0';
+    document.getElementById('search').value='';
+    renderLobby();
+  };
+}
+function renderLobby(){
+  const q = (document.getElementById('search').value||'').toLowerCase();
+  const ids = applyFilters(Object.keys(state.tables).filter(id=>{
+    const t = state.tables[id];
+    if(!(t.numbers && t.numbers.length && isRouletteNumbers(t.numbers.slice(0,12)) && isRouletteTable(id))) return false;
+    if(PROV.filter !== 'all' && provOf(id) !== PROV.filter) return false;
+    return true;
+  }));
+  const MAXCARDS=80;
+  const shown=ids.slice(0,MAXCARDS);
+  countNote.textContent = ids.length ? (ids.length+' live roulette tables'+(ids.length>MAXCARDS?' (showing '+MAXCARDS+' — use search to narrow)':'')) : '';
+  if(!ids.length){
+    if(state.connected) loadingEl.textContent='NO TABLES MATCH THE FILTER — try “Reset”';
+    loadingEl.style.display=state.connected?'block':'none';
+    tablesEl.innerHTML='';
+    return;
+  }
+  loadingEl.style.display = 'none';
+  tablesEl.innerHTML = shown.map(id=>{
+    const t = state.tables[id];
+    const img = tableImg(id);
+    const bg = img ? `background-image:url('${img}')` : `background:radial-gradient(circle at 50% 30%, rgba(245,179,1,.18), rgba(10,15,28,1) 70%)`;
+    const dealer = t.dealer ? `<div class="dealer" style="display:block">👤 ${t.dealer}</div>` : '';
+    return `<div class="tcard" data-id="${id}">
+      <div class="tbg" style="${bg}"></div>
+      <div class="live-badge"><i></i>LIVE</div>
+      <div class="prov-tag${provOf(id)==='Pragmatic Play'?' prag':''}">${provOf(id)}</div>${dealer}
+      <div class="tcontent"><div class="tname">${tableDisplayName(id)}</div>
+        <div class="card-best">${cardBestHTML(id)}</div>
+        <div class="nums-box">${cardNumbersHTML(t.numbers)}</div></div>
+      <div class="bottom-line"></div></div>`;
+  }).join('');
+  tablesEl.querySelectorAll('.tcard').forEach(c=>c.onclick=()=>openTable(c.dataset.id));
+  scheduleLobbyStats(shown);
+}
+
+/* Every table on this feed is European single-zero, so the wheel is locked. */
+function lockEuropean(){
+  if(PRED.wheel!=='eu'){ PRED.wheel='eu'; }
+  setWheel('eu');
+  const sel=document.getElementById('wheelSel');
+  if(sel) sel.value='eu';
+}
+function openTable(id){
+  if(!isRouletteTable(id)){
+    showErr('Prediction is disabled for race-track, horse-racing and other non-roulette games.');
+    return;
+  }
+  state.selected = id;
+  lockEuropean();
+  loadJournals(id);          // bring back the recent 10 W/L for this table
+  PRED.sig = '';
+  document.getElementById('lobbyView').style.display='none';
+  document.getElementById('detail').classList.add('active');
+  document.getElementById('backBtn').style.display='inline-block';
+  renderDetail();
+}
+function closeTable(){
+  state.selected = null;
+  document.getElementById('lobbyView').style.display='';
+  document.getElementById('detail').classList.remove('active');
+  document.getElementById('backBtn').style.display='none';
+}
+document.getElementById('backBtn').onclick = closeTable;
+wireFilters();
+(function wireProviders(){
+  const bar=document.querySelector('.provbar');
+  if(!bar) return;
+  bar.addEventListener('click', e=>{
+    const b=e.target.closest('.pchip'); if(!b) return;
+    PROV.filter=b.getAttribute('data-p');
+    bar.querySelectorAll('.pchip').forEach(c=>c.classList.toggle('active', c===b));
+    if(state.selected && provOf(state.selected)!==PROV.filter && PROV.filter!=='all') closeTable();
+    renderLobby();
+  });
+})();
+
+function renderDetail(){
+  const id = state.selected; if(!id) return;
+  const t = state.tables[id]; if(!t) return;
+  const nums = t.numbers.slice(0, MAX_DETAIL);
+  document.getElementById('dTableName').textContent = '— ' + tableDisplayName(id);
+  // left clone card
+  const img = tableImg(id);
+  const bg = img ? `background-image:url('${img}')` : `background:radial-gradient(circle at 50% 30%, rgba(245,179,1,.18), rgba(10,15,28,1) 70%)`;
+  document.getElementById('detailCard').innerHTML =
+    `<div class="tbg" style="${bg}"></div><div class="live-badge"><i></i>LIVE</div>
+     <div class="tcontent"><div class="tname">${tableDisplayName(id)}</div>
+     <div class="nums-box">${cardNumbersHTML(t.numbers)}</div></div><div class="bottom-line"></div>`;
+  // circles — index 0 = LAST spin, gold ring
+  const cont = document.getElementById('detailNumbers');
+  cont.innerHTML = nums.map((n,i)=>`<div class="num-circle ${i===0?'latest':''}" style="background:${numBg(n)};color:${numColor(n)};border:${i===0?'':numBorder(n)};animation-delay:${(i*0.04).toFixed(2)}s">${dsp(n)}</div>`).join('') || '<span style="color:#7d8aa0">No spins yet</span>';
+  // history list newest first
+  document.getElementById('historyList').innerHTML = nums.map((n,i)=>`<span style="font-family:Orbitron;font-size:.72rem;font-weight:700;padding:.25rem .45rem;border-radius:.35rem;${i===0?'background:rgba(245,179,1,.16);border:1px solid rgba(245,179,1,.4);':'background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);'}color:${numColor(n)}">#${i+1} ${dsp(n)}</span>`).join('');
+  // big last
+  if(nums.length){
+    const last = nums[0];
+    const bb = document.getElementById('bigBall');
+    bb.textContent = dsp(last); bb.style.background = numBg(last); bb.style.color = numColor(last); bb.style.border = numBorder(last);
+    document.getElementById('bigMeta').innerHTML = `<span style="color:${numColor(last)}">${dsp(last)}</span> — ${last===0||last===37?'<span style="color:#22c55e">GREEN • ZERO</span>':REDS.has(last)?'<span style="color:#ff4d5e">RED</span>':'<span style="color:#fff">BLACK</span>'} ${t.dealer?`• 👤 ${t.dealer}`:''}`;
+    document.getElementById('bigTime').textContent = t.updatedAt ? 'Updated ' + new Date(t.updatedAt).toLocaleTimeString() : '';
+    let r=0,b=0,g=0; nums.forEach(n=>{if(n===0||n===37)g++;else if(REDS.has(n))r++;else b++;});
+    document.getElementById('stRed').textContent=r; document.getElementById('stBlack').textContent=b; document.getElementById('stGreen').textContent=g;
+  }
+  renderPredictions();
+}
+
+/* ================= PREDICTION ENGINE ================= */
+const WHEELS={
+  eu:[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26],
+  us:[0,28,9,26,30,11,7,20,32,17,5,22,34,15,3,24,36,13,1,37,27,10,25,29,12,8,19,31,18,6,21,33,16,4,23,35,14,2]
+};
+let RING=WHEELS.eu,N=37,POS={};
+/* Precomputed n9 arcs. Every coverage check is now an array lookup instead of
+   building Sets — this is what removes the lag on every spin. */
+let ARC=null;
+function buildArcs(){
+  ARC=new Uint8Array(N*N);
+  for(let i=0;i<N;i++){ const num=numAt(i), base=num*N; for(let k=-4;k<=4;k++) ARC[base+numAt(i+k)]=1; }
+}
+function covHas(picks,n){
+  if(!ARC) buildArcs();
+  for(let i=0;i<picks.length;i++) if(ARC[picks[i].n*N+n]) return true;
+  return false;
+}
+function covSize(picks){
+  if(!ARC) buildArcs();
+  const seen=new Uint8Array(N); let c=0;
+  for(const p of picks){ const base=p.n*N; for(let k=0;k<N;k++) if(ARC[base+k]&&!seen[k]){ seen[k]=1; c++; } }
+  return c;
+}
+function setWheel(k){RING=WHEELS[k]||WHEELS.eu;N=RING.length;POS={};RING.forEach((n,i)=>POS[n]=i);buildArcs();}
+function numAt(p){return RING[((p%N)+N)%N];}
+function pocketDist(a,b){if(POS[a]===undefined||POS[b]===undefined)return 99;const d=Math.abs(POS[a]-POS[b]);return Math.min(d,N-d);}
+function signedJump(from,to){if(POS[from]===undefined||POS[to]===undefined)return 0;let d=POS[to]-POS[from];d=((d%N)+N)%N;if(d>N/2)d-=N;return d;}
+function covSet(list){const s=new Set();for(const t of list){if(POS[t]===undefined)continue;for(let k=-HK;k<=HK;k++)s.add(numAt(POS[t]+k));}return s;}
+function dsp(n){return n===37?'00':String(n);}
+function avg(a){return a.length?a.reduce((x,y)=>x+y,0)/a.length:0;}
+function r1(x){return Math.round(x*10)/10;}
+const pct=x=>Math.round(x*100);
+setWheel('eu');
+
+const HK=4;                                  // n9 = the number + 4 pockets on each side = 9 pockets total
+const PRED={wheel:'eu',depth:120,ruleSel:'auto',opp:'board',override:null,sig:''};
+try{ const op=localStorage.getItem('rp_opposite_mode'); if(op==='wheel'||op==='board') PRED.opp=op; }catch(e){}
+const LOBBY={stats:{},fresh:false};
+const SRC_OFFSET=['from the last spin','from 2 spins ago','from 3 spins ago'];
+const SRC_TARGET=['hottest sector #1','hottest sector #2','3rd hot sector'];
+const SRC_SIG=['travel target','chart top #1','chart top #2'];
+const SRC_COMBO=['merged pick 1','merged pick 2','merged pick 3'];
+const SRC_PRIV1=['last spin','nearest hot neighbour','2nd nearest'];
+const SRC_PRIV2=['opposite of last spin','hot neighbour of opposite','2nd neighbour'];
+const SRC_PRIV3=['last spin n9','opposite n9','filler'];
+const SRC_MARKOV=['primary transition','secondary transition','sector flow'];
+
+/* Strategy registry — every strategy can be switched on/off and is saved in localStorage. */
+const STRAT_DEFS=[
+  {k:'OFFSET',   name:'1 · OFFSET STRATEGY',              short:'OFFSET',   def:true},
+  {k:'TARGET',   name:'2 · TARGET STRATEGY',              short:'TARGET',   def:true},
+  {k:'SIGNATURE',name:'3 · DEALER SIGNATURE',             short:'SIGNATURE',def:true},
+  {k:'COMBO',    name:'4 · COMBO (BEST 2)',               short:'COMBO',    def:true},
+  {k:'PRIV1',    name:'5 · LAST SPIN + NEIGHBOURS',       short:'PRIV1',    def:true},
+  {k:'PRIV2',    name:'6 · OPPOSITE + NEIGHBOURS',        short:'PRIV2',    def:true},
+  {k:'PRIV3',    name:'7 · LAST 9 + OPPOSITE 9',          short:'PRIV3',    def:true},
+  {k:'MARKOV',   name:'8 · MARKOV SECTOR FLOW',           short:'MARKOV',   def:true}
+];
+const STRAT_ORDER={OFFSET:1,TARGET:2,SIGNATURE:3,COMBO:4,PRIV1:5,PRIV2:6,PRIV3:7,MARKOV:8};
+const ENABLED={};
+function loadEnabled(){
+  let saved={};
+  try{ saved=JSON.parse(localStorage.getItem('rp_enabled_strategies')||'{}')||{}; }catch(e){}
+  STRAT_DEFS.forEach(d=>{ ENABLED[d.k]=saved[d.k]!==undefined?!!saved[d.k]:d.def; });
+  if(!STRAT_DEFS.some(d=>ENABLED[d.k])) ENABLED.OFFSET=true;
+}
+function saveEnabled(){ try{ localStorage.setItem('rp_enabled_strategies',JSON.stringify(ENABLED)); }catch(e){} }
+function stratOn(k){ return !!ENABLED[k]; }
+function enabledKey(){ return STRAT_DEFS.filter(d=>ENABLED[d.k]).map(d=>d.k).join(','); }
+loadEnabled();
+
+/* ---------- strategy on/off UI (requirement 3) ---------- */
+function buildStratToggles(){
+  const wrap=document.getElementById('stratToggles');
+  if(!wrap) return;
+  wrap.querySelectorAll('label.stog').forEach(e=>e.remove());
+  const tools=wrap.querySelector('.stog-tools');
+  STRAT_DEFS.forEach(d=>{
+    const lab=document.createElement('label');
+    lab.className='stog';
+    lab.title=d.name;
+    lab.innerHTML='<input type="checkbox" '+(ENABLED[d.k]?'checked':'')+'> <span>'+d.short+'</span>';
+    const inp=lab.querySelector('input');
+    inp.addEventListener('change',e=>{
+      ENABLED[d.k]=e.target.checked;
+      if(!STRAT_DEFS.some(x=>ENABLED[x.k])){ ENABLED[d.k]=true; e.target.checked=true; }
+      saveEnabled(); PRED.sig=''; LOBBY.stats={};
+      try{ renderPredictions(); renderLobby(); }catch(err){}
+    });
+    if(tools) wrap.insertBefore(lab,tools); else wrap.appendChild(lab);
+  });
+}
+function stratAll(on){
+  STRAT_DEFS.forEach(d=>ENABLED[d.k]=on);
+  if(!on) ENABLED.OFFSET=true;              // never allow zero strategies
+  saveEnabled(); buildStratToggles(); PRED.sig=''; LOBBY.stats={};
+  try{ renderPredictions(); renderLobby(); }catch(e){}
+}
+document.getElementById('stAll').onclick=()=>stratAll(true);
+document.getElementById('stNone').onclick=()=>stratAll(false);
+document.getElementById('selfTestBtn').onclick=runSelfTest;
+document.getElementById('viewTrack').onclick=()=>{ VIEW='track'; PRED.sig=''; renderPredictions(); };
+document.getElementById('viewWheel').onclick=()=>{ VIEW='wheel'; PRED.sig=''; renderPredictions(); };
+
+buildStratToggles();
+
+/* Opposite mapping.
+   - board: mirror used by the user's example (14 -> 6). It is an involution on 0..36.
+   - wheel: physical wheel opposite (top half +18, bottom half -18), e.g. 14 -> 25. */
+const OPP_BOARD=(()=>{ const m={}; for(let n=0;n<=36;n++) m[n]=((20-n)%37+37)%37; return m; })();
+function wheelOpposite(n){
+  if(POS[n]===undefined) return null;
+  const p=POS[n], half=Math.floor(N/2);          // 18 on European, 19 on American
+  const q=(p<half)?p+half:p-half;
+  return numAt(q);
+}
+function oppositeNum(n){
+  if(n===undefined||n===null||POS[n]===undefined) return null;
+  if(PRED.opp==='wheel') return wheelOpposite(n);
+  return OPP_BOARD[n]!==undefined?OPP_BOARD[n]:n;
+}
+
+/* ---------- performance scoring (recency + stability + edge) ---------- */
+function hitRate(wl){ return wl&&wl.length?wl.filter(c=>c==='W').length/wl.length:0; }
+/* wl[0] = newest spin, so the RECENT n are the FIRST n */
+function lastN(arr,n){ return arr.slice(0,Math.max(0,n)); }
+function lossStreak(wl){
+  let n=0; if(!wl) return 0;
+  for(let i=0;i<wl.length;i++){ if(wl[i]==='L') n++; else break; }   // index 0 = newest
+  return n;
+}
+function winStreak(wl){
+  let n=0; if(!wl) return 0;
+  for(let i=0;i<wl.length;i++){ if(wl[i]==='W') n++; else break; }   // index 0 = newest
+  return n;
+}
+function maxLossStreak(wl){
+  let best=0,cur=0; if(!wl) return 0;
+  for(const c of wl){ if(c==='L'){cur++; if(cur>best)best=cur;} else cur=0; }
+  return best;
+}
+function recentRate(s,n){ return hitRate(lastN(s.wl||[],n||16)); }
+function scoreStrategy(s){
+  if(!s) return -Infinity;
+  const rr=recentRate(s,16);
+  const rr8=recentRate(s,8);
+  const edge=(s.cur||0)-(s.cov||0.4865);
+  const ls=lossStreak(s.wl);
+  const ws=winStreak(s.wl);
+  const sample=Math.min(1,(s.wl&&s.wl.length?s.wl.length:0)/25);
+  const penalty=ls>=5?0.16:ls>=4?0.09:ls>=3?0.04:0;
+  const bonus=Math.min(0.045, ws*0.012);
+  const sigPen=(s.k==='SIGNATURE'&&s.extra&&s.extra.dirCons<0.52)?0.03:0;
+  return ((s.cur||0)*0.32+(s.next||0)*0.18+rr*0.26+rr8*0.12+Math.max(0,edge)*0.12)*(0.84+0.16*sample)+bonus-penalty-sigPen;
+}
+function confidenceOf(s){
+  const exp=s.cov||0.4865;
+  const rr=recentRate(s,12);
+  const ls=lossStreak(s.wl);
+  const edge=(s.cur||0)-exp;
+  if((s.wl||[]).length<6) return {label:'LOW SAMPLE',cls:'warn',why:'few backtest spins'};
+  if(ls>=5) return {label:'COLD · WAIT',cls:'bad',why:ls+' losses in a row'};
+  if(rr>=exp+0.04 && edge>=-0.01) return {label:'HIGH',cls:'good',why:'recent form above baseline'};
+  if(rr>=exp-0.05 && edge>=-0.04) return {label:'MEDIUM',cls:'ok',why:'near baseline'};
+  return {label:'LOW · WAIT',cls:'bad',why:'recent form below baseline'};
+}
+
+/* ---------- table heat & disjoint n9-pair optimization ---------- */
+const MAXBET=18;
+const MINSEP=9;    /* two n9 arcs (radius 4) never overlap when their centres are >= 9 apart,
+                      so the bet is ALWAYS exactly 18 distinct pockets. */
+function ringDist(a,b){const d=Math.abs(POS[a]-POS[b]);return Math.min(d,N-d);}
+function tableHeat(nums){
+  const h=new Float64Array(N);
+  for(let i=0;i<nums.length;i++){
+    const p=POS[nums[i]]; if(p===undefined) continue;
+    const w=Math.exp(-i/10);
+    for(let k=-6;k<=6;k++) h[numAt(p+k)]+=w*Math.exp(-(k*k)/28);
+  }
+  return h;
+}
+function blockSize(r){return 2*r+1;}
+function unionOf(picks){
+  if(!ARC) buildArcs();
+  const seen=new Uint8Array(N);
+  for(const p of picks){ const base=p.n*N; for(let k=0;k<N;k++) if(ARC[base+k]) seen[k]=1; }
+  const s=new Set();
+  for(let k=0;k<N;k++) if(seen[k]) s.add(k);
+  return s;
+}
+function label(p){return dsp(p.n)+'n'+blockSize(p.r);}
+function validCands(cands){
+  const c=[];
+  for(const x of (cands||[])) if(x!==undefined && x!==null && POS[x]!==undefined && c.indexOf(x)<0) c.push(x);
+  return c;
+}
+function arcOf(n){const s=new Set();for(let k=-4;k<=4;k++) s.add(numAt(POS[n]+k));return s;}
+function sepOk(a,b){ return a!==b && POS[a]!==undefined && POS[b]!==undefined && ringDist(a,b)>=MINSEP; }
+function pairBet9(a,b){
+  const out=[{n:a,r:4}];
+  if(b!==undefined && b!==null && sepOk(a,b)) out.push({n:b,r:4});
+  return out;
+}
+
+/* Upgraded Smart Partner Selector:
+   Finds the non-overlapping partner `b` (>= 9 pockets from `anchor`) that maximizes
+   recency-weighted UNCOVERED spin coverage + Markov transition from `h[0]` + bullseye density.
+   Uses ONLY past spins `h` — zero look-ahead. */
+function smartPartner(anchor,h,mode){
+  if(!ARC) buildArcs();
+  if(POS[anchor]===undefined) return null;
+  const W=Math.min((mode&&mode.w)||16, h?h.length:0);
+  const decay=(mode&&mode.decay)||8.5;
+  const useTrans=mode?(mode.trans!==false):true;
+  const useCold=!!(mode&&mode.cold);
+  const aBase=anchor*N;
+  const last=h&&h.length?h[0]:null;
+  let best=null, bestSc=-1e9;
+  for(let i=0;i<N;i++){
+    const c=numAt(i);
+    if(!sepOk(anchor,c)) continue;
+    const bBase=c*N;
+    let sc=0;
+    for(let k=0;k<W;k++){
+      const n=h[k];
+      const wt=Math.exp(-k/decay);
+      if(ARC[bBase+n] && !ARC[aBase+n]) sc+=wt*1.35;
+      else if(ARC[bBase+n]) sc+=wt*0.30;
+      if(ringDist(c,n)<=1) sc+=wt*0.28;
+    }
+    if(useTrans && last!==null && h.length>=4){
+      const tLim=Math.min(h.length,30);
+      for(let t=1;t<tLim;t++){
+        const d0=ringDist(h[t],last);
+        if(d0<=4 && ARC[bBase+h[t-1]]){
+          sc+=Math.exp(-t/15)*(d0<=1?1.35:0.65);
+        }
+      }
+    }
+    if(useCold){
+      let miss=0;
+      for(let k=0;k<Math.min(h?h.length:0,14);k++){
+        if(!ARC[bBase+h[k]]) miss++; else break;
+      }
+      if(miss>=4 && miss<=9) sc=1.5+miss*0.18-sc*0.25;
+      else sc=-sc*0.4;
+    }
+    if(sc>bestSc){ bestSc=sc; best=c; }
+  }
+  return best;
+}
+function bestSecond(anchor,h){
+  return smartPartner(anchor,h,{w:16,decay:8.5,trans:true});
+}
+function makeBet(anchor,h,forced,mode){
+  if(anchor===undefined||anchor===null||POS[anchor]===undefined) return [];
+  if(forced!==undefined && forced!==null && sepOk(anchor,forced)) return pairBet9(anchor,forced);
+  const b=smartPartner(anchor,h,mode);
+  return b===null?pairBet9(anchor,numAt(POS[anchor]+18)):pairBet9(anchor,b);
+}
+/* Rank candidate indices by their 9-pocket n9 sector heat + bullseye hits in past spins `hist`. */
+function localRank(cands,hist){
+  if(!ARC) buildArcs();
+  const c=validCands(cands);
+  if(!c.length) return [0];
+  const W=Math.min(20,hist?hist.length:0);
+  const sc=c.map(n=>{
+    const base=n*N;
+    let s=0;
+    for(let i=0;i<W;i++){
+      const wt=Math.exp(-i/8.5);
+      if(ARC[base+hist[i]]) s+=wt;
+      if(ringDist(n,hist[i])<=1) s+=wt*0.45;
+    }
+    return s;
+  });
+  return c.map((_,j)=>j).sort((a,b)=>(sc[b]-sc[a])||(a-b));
+}
+function betCoverage(picks,h){
+  if(!ARC) buildArcs();
+  const W=Math.min(18,h?h.length:0);
+  let hit=0;
+  for(let k=0;k<W;k++){ if(covHas(picks,h[k])) hit+=Math.exp(-k/10); }
+  return hit;
+}
+/* Joint Disjoint-Pair Selector:
+   Tests both direct non-overlapping candidate pairs `(c[i], c[j])` AND smart-partnered
+   anchors `(c[i], smartPartner(c[i]))`, keeping the pair with highest recency-weighted coverage. */
+function chooseBet(cands,byHit,heat,h){
+  const c=validCands(cands);
+  if(!c.length) return [];
+  const rk=i=>{const p=byHit?byHit.indexOf(i):-1;return p<0?9:p;};
+  const ordered=c.slice().sort((x,y)=>rk(c.indexOf(x))-rk(c.indexOf(y)));
+  let best=null;
+  // 1) Try pairing strategy's own candidates directly if they don't overlap
+  for(let i=0;i<ordered.length;i++){
+    for(let j=i+1;j<ordered.length;j++){
+      if(sepOk(ordered[i],ordered[j])){
+        const p=pairBet9(ordered[i],ordered[j]);
+        const sc=betCoverage(p,h)*105 - i*1.5 - j*0.8;
+        if(!best||sc>best.sc) best={picks:p,sc:sc};
+      }
+    }
+  }
+  // 2) Try top 2 candidates with adaptive smartPartner
+  for(let i=0;i<Math.min(2,ordered.length);i++){
+    const p=makeBet(ordered[i],h);
+    if(p.length<2) continue;
+    const sc=betCoverage(p,h)*100 - i*1.5;
+    if(!best||sc>best.sc) best={picks:p,sc:sc};
+  }
+  return best?best.picks:makeBet(ordered[0],h);
+}
+
+/* ---------- 1. OFFSET STRATEGY (15 rules: classic jumps + alternating dealer hand + sector phase) ---------- */
+const RULE_DEFS=[
+ {k:'p1',  n:'(+1)',        d:(j0)=>1,                     note:'1 pocket clockwise from the last spin'},
+ {k:'m1',  n:'(−1)',        d:(j0)=>-1,                    note:'1 pocket counter-clockwise from the last spin'},
+ {k:'jp',  n:'(+ jump)',    d:(j0)=>j0,                    note:'repeat the last wheel travel distance'},
+ {k:'jm',  n:'(− jump)',    d:(j0)=>-j0,                   note:'reverse the last wheel travel distance (alternating hand)'},
+ {k:'pp1', n:'(+ & +1)',    d:(j0)=>j0+1,                  note:'repeat the travel, then +1 pocket'},
+ {k:'pm1', n:'(+ & −1)',    d:(j0)=>j0-1,                  note:'repeat the travel, then −1 pocket'},
+ {k:'mp1', n:'(− & +1)',    d:(j0)=>-j0+1,                 note:'reverse the travel, then +1 pocket'},
+ {k:'mm1', n:'(− & −1)',    d:(j0)=>-j0-1,                 note:'reverse the travel, then −1 pocket'},
+ {k:'j2',  n:'(2× jump)',   d:(j0)=>2*j0,                  note:'double the last travel distance'},
+ {k:'ja',  n:'(alt jump)',  d:(j0,j1)=>j1,                 note:'repeat the same-hand travel from 2 spins ago'},
+ {k:'jma', n:'(−alt jump)', d:(j0,j1)=>-j1,                note:'reverse the travel from 2 spins ago'},
+ {k:'jav', n:'(avg jump)',  d:(j0,j1)=>Math.round((j0+j1)/2), note:'mean of the last 2 wheel jumps'},
+ {k:'jdf', n:'(alt mean)',  d:(j0,j1)=>Math.round((j0-j1)/2), note:'alternating-direction mean jump'},
+ {k:'s9',  n:'(+9 sector)', d:()=>9,                       note:'9-pocket quadrant shift clockwise'},
+ {k:'s18', n:'(opposite)',  d:()=>18,                      note:'18-pocket diametric wheel shift'}
+];
+function rulePreds(hist,def){
+  const out=[];
+  if(!hist || hist.length<2) return out;
+  const j0=signedJump(hist[1],hist[0]);
+  const j1=hist.length>=3?signedJump(hist[2],hist[1]):j0;
+  const j2=hist.length>=4?signedJump(hist[3],hist[2]):j1;
+  // Project forward from hist[0] using current and previous jump rhythms
+  const p0=numAt(POS[hist[0]]+def.d(j0,j1));
+  const p1=numAt(POS[hist[0]]+def.d(j1,j2));
+  const p2=numAt(POS[hist[1]]+def.d(j0,j1));
+  for(const x of [p0,p1,p2]) if(out.indexOf(x)<0) out.push(x);
+  if(out.length<2) out.push(numAt(POS[p0]+18));
+  return out;
+}
+function offsetBetForRule(h,def){
+  const cands=rulePreds(h,def);
+  if(!cands.length) return [];
+  const a=cands[0];
+  const b=smartPartner(a,h,{w:14,decay:7,trans:true});
+  return pairBet9(a,b);
+}
+function sortOffset(rows,sel){
+  const auto=(a,b)=>{
+    const sa=(a.score!==undefined?a.score:-99), sb=(b.score!==undefined?b.score:-99);
+    return (sb-sa)||(a.avgD-b.avgD)||(b.conf-a.conf)||(b.cur-a.cur);
+  };
+  let list=rows.slice();
+  if(sel==='lo') list.sort((a,b)=>a.avgD-b.avgD);
+  else if(sel==='hi') list.sort((a,b)=>b.avgD-a.avgD);
+  else{
+    if(sel==='onlyP') list=list.filter(r=>r.def.k==='p1');
+    else if(sel==='onlyM') list=list.filter(r=>r.def.k==='m1');
+    else if(sel==='onlyJ') list=list.filter(r=>['jp','jm','j2','pp1','pm1','mp1','mm1','ja','jma','jav','jdf'].indexOf(r.def.k)>=0);
+    if(!list.length) list=rows.slice();
+    list.sort(auto);
+  }
+  return list;
+}
+
+/* ---------- 2. TARGET STRATEGY (Multi-Horizon Sector Heat + Repeater + Due Rebound Bank) ---------- */
+const TARGET_MODELS=[
+  {k:'t_fast', name:'Fast Sector Heat (W=8)',   w:8,  decay:4.5, mode:'hot'},
+  {k:'t_med',  name:'Medium Sector Heat (W=18)',w:18, decay:10,  mode:'hot'},
+  {k:'t_deep', name:'Deep Wheel Bias (W=32)',   w:32, decay:22,  mode:'hot'},
+  {k:'t_rep',  name:'Repeater + Hot Twin',      w:12, decay:6,   mode:'rep'},
+  {k:'t_due',  name:'Sleeper Sector Rebound',   w:14, decay:8,   mode:'due'},
+  {k:'t_alt',  name:'Alternating Spin Target',  w:12, decay:5.5, mode:'alt'}
+];
+function targetModelPicks(h,m){
+  if(!ARC) buildArcs();
+  if(!h||h.length<3) return [];
+  const mod=m||TARGET_MODELS[0];
+  const W=Math.min(mod.w,h.length);
+  const sc=new Float64Array(N);
+  for(let c=0;c<N;c++){
+    const base=c*N;
+    for(let k=0;k<W;k++){
+      const n=h[k];
+      if(mod.mode==='alt' && (k%2!==1)) continue;
+      const wt=Math.exp(-k/mod.decay);
+      if(ARC[base+n]) sc[c]+=(mod.mode==='due'?-wt:wt);
+      if(mod.mode==='rep' && n===c) sc[c]+=wt*2.2;
+      else if(ringDist(c,n)<=1) sc[c]+=(mod.mode==='due'?-wt*0.4:wt*0.35);
+    }
+  }
+  let a=0;
+  for(let c=1;c<N;c++) if(sc[c]>sc[a]) a=c;
+  let bestB=null, bestJoint=-1e9;
+  const aBase=a*N;
+  for(let c=0;c<N;c++){
+    if(!sepOk(a,c)) continue;
+    const bBase=c*N;
+    let jsc=sc[c]*0.6;
+    for(let k=0;k<W;k++){
+      const n=h[k];
+      const wt=Math.exp(-k/mod.decay);
+      if(ARC[bBase+n] && !ARC[aBase+n]) jsc+=(mod.mode==='due'?-wt:wt*1.4);
+    }
+    if(jsc>bestJoint){ bestJoint=jsc; bestB=c; }
+  }
+  return pairBet9(a,bestB);
+}
+function hotNums(h,m){
+  const p=targetModelPicks(h,m||TARGET_MODELS[1]);
+  if(!p.length) return [];
+  const out=p.map(x=>x.n);
+  const c={};
+  for(let i=0;i<h.length;i++) c[h[i]]=(c[h[i]]||0)+Math.exp(-i/8);
+  for(const k of Object.keys(c).sort((a,b)=>c[b]-c[a]).map(Number)){
+    if(out.indexOf(k)<0){ out.push(k); if(out.length>=3) break; }
+  }
+  return out;
+}
+function patternNext(s){
+  for(let k=Math.min(7,s.length-2);k>=2;k--){
+    const suf=s.slice(s.length-k);
+    let tW=0,tL=0,pos=0;
+    while((pos=s.indexOf(suf,pos))>=0 && pos+k<s.length){ if(s[pos+k]==='W')tW++; else tL++; pos++; }
+    const tot=tW+tL;
+    if(tot>=3){
+      const sym=(tW>=tL)?'W':'L', c=Math.max(tW,tL)/tot;
+      if(c>=0.65) return {sym:sym,conf:c,pat:suf};
+    }
+  }
+  return null;
+}
+
+/* ---------- 3. DEALER SIGNATURE (Circular Ballistics + Alternating Hand + Phase Cycle Bank) ---------- */
+const SIG_MODELS=[
+  {k:'s_same', name:'Same-Hand Travel Lock',   mode:'same', decay:8},
+  {k:'s_alt',  name:'Alternating Croupier Hand',mode:'alt',  decay:8},
+  {k:'s_rev',  name:'Reverse Bounce Signature', mode:'rev',  decay:6.5},
+  {k:'s_cyc2', name:'2-Spin Rotor Phase Cycle', mode:'cyc2', decay:9},
+  {k:'s_vel',  name:'Velocity Drift Projection',mode:'vel',  decay:7},
+  {k:'s_anti', name:'Anti-Phase Scatter Lock',  mode:'anti', decay:8}
+];
+function sigModelPicks(h,m){
+  if(!ARC) buildArcs();
+  if(!h||h.length<4) return h&&h.length?makeBet(h[0],h):[];
+  const mod=m||SIG_MODELS[0];
+  const p0=POS[h[0]], p1=POS[h[1]];
+  const stepSc=new Float64Array(N);
+  const lim=Math.min(h.length-2,28);
+  for(let i=0;i<lim;i++){
+    const wt=Math.exp(-i/mod.decay);
+    const d=((POS[h[i]]-POS[h[i+1]])%N+N)%N;
+    let targetPos=0;
+    if(mod.mode==='same') targetPos=(p0+d)%N;
+    else if(mod.mode==='alt') targetPos=(p0+(i%2===1?d:(N-d)))%N;
+    else if(mod.mode==='rev') targetPos=(p0+N-d)%N;
+    else if(mod.mode==='cyc2'){
+      const d2=((POS[h[i]]-POS[h[i+2]])%N+N)%N;
+      targetPos=(p1+d2)%N;
+    } else if(mod.mode==='vel'){
+      const dPrev=((POS[h[i+1]]-POS[h[i+2]])%N+N)%N;
+      targetPos=(p0+2*d-dPrev+N)%N;
+    } else {
+      targetPos=(p0+d+18)%N;
+    }
+    const tNum=RING[targetPos];
+    for(let c=0;c<N;c++){
+      if(ARC[c*N+tNum]) stepSc[c]+=wt*(c===tNum?1.5:1.0);
+    }
+  }
+  let a=0;
+  for(let c=1;c<N;c++) if(stepSc[c]>stepSc[a]) a=c;
+  let bestB=null, bestSc=-1e9;
+  for(let c=0;c<N;c++){
+    if(!sepOk(a,c)) continue;
+    if(stepSc[c]>bestSc){ bestSc=stepSc[c]; bestB=c; }
+  }
+  return pairBet9(a,bestB);
+}
+function sigNums(h,m){
+  const p=sigModelPicks(h,m||SIG_MODELS[1]);
+  return p.map(x=>x.n);
+}
+function sigStats(nums,depth){
+  const J=[];
+  for(let i=0;i<Math.min(depth+2,nums.length-1);i++) J.push(signedJump(nums[i+1],nums[i]));
+  const mj=avg(J), meanAbs=avg(J.map(Math.abs));
+  const sd=Math.sqrt(avg(J.map(j=>(j-mj)*(j-mj))));
+  const dir=mj>=0?1:-1;
+  const dirCons=J.filter(j=>(j>=0?1:-1)===dir).length/Math.max(1,J.length);
+  const roll=[];
+  // Build rolling 5-spin travel from newest (i=0) to oldest, then reverse for left->right chart
+  for(let i=0;i+4<J.length;i++) roll.push(avg(J.slice(i,i+5).map(Math.abs)));
+  const ref=avg(roll);
+  const over=roll.length?roll[0]>ref:false;
+  return {meanJ:r1(mj),sd:r1(sd),meanAbs:r1(meanAbs),dirCons:dirCons,over:over,
+          roll:roll.slice(0,60).reverse(),ref:ref};
+}
+function refAvg(a){return avg(a);}
+
+/* ---------- 5, 6, 7. PRIVATE STRATEGIES (Adaptive Partner & Non-Overlapping Shift Bank) ---------- */
+const PRIV_MODES=[
+  {k:'pm_fast', name:'Fast Momentum Partner (W=7)',  w:7,  decay:4,  trans:false, cold:false},
+  {k:'pm_med',  name:'Medium Heat Partner (W=16)',   w:16, decay:9,  trans:false, cold:false},
+  {k:'pm_mkv',  name:'Markov Transition Partner',    w:20, decay:12, trans:true,  cold:false},
+  {k:'pm_due',  name:'Due Sector Rebound Partner',   w:12, decay:7,  trans:false, cold:true},
+  {k:'pm_jmp',  name:'Jump-Projected Partner',       w:10, decay:5,  trans:true,  cold:false, jump:true}
+];
+function neighborCands(n,span){
+  const out=[];
+  if(n===undefined||n===null||POS[n]===undefined) return out;
+  out.push(n);
+  for(let k=1;k<=span;k++){ out.push(numAt(POS[n]+k)); out.push(numAt(POS[n]-k)); }
+  return out;
+}
+function priv1Cands(h){ return h&&h.length?neighborCands(h[0],2):[]; }
+function priv2Cands(h){
+  if(!h||!h.length) return [];
+  const o=oppositeNum(h[0]);
+  return o===null?[]:neighborCands(o,2);
+}
+function priv3Cands(h){
+  if(!h||!h.length) return [];
+  const a=h[0], b=oppositeNum(a);
+  const out=[a]; if(b!==null && b!==a) out.push(b);
+  return out;
+}
+function priv1ModelBet(h,m){
+  if(!h||!h.length) return [];
+  const a=h[0], mod=m||PRIV_MODES[2];
+  if(mod.jump && h.length>=2){
+    const j=signedJump(h[1],h[0]);
+    const jb=numAt(POS[a]+(j>=0?Math.max(9,j):Math.min(-9,j)));
+    if(sepOk(a,jb)) return pairBet9(a,jb);
+  }
+  return pairBet9(a,smartPartner(a,h,mod));
+}
+function priv2ModelBet(h,m){
+  if(!h||!h.length) return [];
+  const a=oppositeNum(h[0]);
+  if(a===null) return [];
+  const mod=m||PRIV_MODES[2];
+  if(mod.jump){
+    const altOpp=(PRED.opp==='wheel')?OPP_BOARD[h[0]]:wheelOpposite(h[0]);
+    if(sepOk(a,altOpp)) return pairBet9(a,altOpp);
+  }
+  return pairBet9(a,smartPartner(a,h,mod));
+}
+const PRIV3_MODES=[
+  {k:'p3_shift', name:'Exact Mirror + Minimal Shift', mode:'shift_board', w:12, decay:7},
+  {k:'p3_wheel', name:'Last 9 + Wheel Opposite 9',    mode:'wheel_opp',   w:12, decay:7},
+  {k:'p3_hot',   name:'Last 9 + Hot Mirror Partner',  mode:'board_hot',   w:8,  decay:4},
+  {k:'p3_cold',  name:'Last 9 + Rebound Partner',     mode:'board_cold',  w:12, decay:7, cold:true}
+];
+function priv3ModelBet(h,m){
+  if(!h||!h.length) return [];
+  const last=h[0], mod=m||PRIV3_MODES[0];
+  const o=(mod.mode==='wheel_opp')?wheelOpposite(last):oppositeNum(last);
+  if(o!==null && sepOk(last,o)) return pairBet9(last,o);
+  if(mod.mode==='shift_board' && o!==null && last!==o){
+    /* Shift centers by <=4 pockets so BOTH `last` and `o` stay inside their respective
+       9-pocket arcs while the two centers are >=9 pockets apart (zero overlap = 18 pockets). */
+    let bestPair=null, bestSc=-1e9;
+    for(let da=-4;da<=4;da++){
+      const a=numAt(POS[last]+da);
+      for(let db=-4;db<=4;db++){
+        const b=numAt(POS[o]+db);
+        if(!sepOk(a,b)) continue;
+        const sc=-(Math.abs(da)*1.2+Math.abs(db));
+        if(sc>bestSc){ bestSc=sc; bestPair=[a,b]; }
+      }
+    }
+    if(bestPair) return pairBet9(bestPair[0],bestPair[1]);
+  }
+  return pairBet9(last,smartPartner(last,h,mod));
+}
+function priv1Bet(h){ return priv1ModelBet(h,PRIV_MODES[2]); }
+function priv2Bet(h){ return priv2ModelBet(h,PRIV_MODES[2]); }
+function priv3Bet(h){ return priv3ModelBet(h,PRIV3_MODES[0]); }
+
+/* ---------- 8. NEW STRATEGY: MARKOV SECTOR FLOW (Markov Transition Matrix + Sector Flow) ---------- */
+const MARKOV_MODELS=[
+  {k:'m_1st',  name:'1st-Order Pocket Markov',     mode:'m1',   decay:14},
+  {k:'m_2nd',  name:'2nd-Order Bi-Gram Markov',    mode:'m2',   decay:12},
+  {k:'m_step', name:'Relative Step Markov Kernel', mode:'step', decay:10},
+  {k:'m_hyb',  name:'Markov + Momentum Hybrid',    mode:'hyb',  decay:8},
+  {k:'m_anti', name:'Cross-Wheel Markov Reversion',mode:'anti', decay:10}
+];
+function markovModelPicks(h,m){
+  if(!ARC) buildArcs();
+  if(!h||h.length<4) return h&&h.length?makeBet(h[0],h):[];
+  const mod=m||MARKOV_MODELS[0];
+  const last=h[0], prev=h[1];
+  const prob=new Float64Array(N);
+  const lim=Math.min(h.length-1,38);
+  for(let t=1;t<lim;t++){
+    const wt=Math.exp(-t/mod.decay);
+    const nextNum=h[t-1];
+    if(mod.mode==='m1' || mod.mode==='hyb'){
+      const d=ringDist(h[t],last);
+      if(d<=5) prob[nextNum]+=wt*Math.exp(-(d*d)/6);
+    } else if(mod.mode==='m2'){
+      const d0=ringDist(h[t],last);
+      const d1=(t+1<h.length)?ringDist(h[t+1],prev):9;
+      if(d0<=5 || d1<=5) prob[nextNum]+=wt*(Math.exp(-(d0*d0)/8)+0.65*Math.exp(-(d1*d1)/8));
+    } else if(mod.mode==='step'){
+      const step=((POS[nextNum]-POS[h[t]])%N+N)%N;
+      const proj=numAt(POS[last]+step);
+      prob[proj]+=wt;
+    } else {
+      const d=ringDist(h[t],last);
+      if(d<=6) prob[wheelOpposite(nextNum)]+=wt;
+    }
+  }
+  if(mod.mode==='hyb'){
+    for(let k=0;k<Math.min(10,h.length);k++) prob[h[k]]+=0.45*Math.exp(-k/5);
+  }
+  const arcSc=new Float64Array(N);
+  for(let c=0;c<N;c++){
+    const base=c*N;
+    for(let x=0;x<N;x++) if(ARC[base+x]) arcSc[c]+=prob[x];
+  }
+  let a=0;
+  for(let c=1;c<N;c++) if(arcSc[c]>arcSc[a]) a=c;
+  let bestB=null, bestSc=-1e9;
+  for(let c=0;c<N;c++){
+    if(!sepOk(a,c)) continue;
+    if(arcSc[c]>bestSc){ bestSc=arcSc[c]; bestB=c; }
+  }
+  return pairBet9(a,bestB);
+}
+function markovCands(h,m){
+  return markovModelPicks(h,m||MARKOV_MODELS[0]).map(x=>x.n);
+}
+
+/* ---------- unified evaluation ---------- */
+function evalCore(fn,nums,depth){
+  const lim=Math.min(depth,Math.max(0,nums.length-3));
+  const cands=[],dist=[];
+  for(let k=0;k<lim;k++){
+    const c=fn(nums.slice(k+1));
+    if(!c||!c.length) break;
+    cands.push(c);
+    let best=99; for(const x of c) best=Math.min(best,pocketDist(x,nums[k]));
+    dist.push(best);
+  }
+  return {cands:cands,dist:dist,cnt:cands.length};
+}
+function evaluate(fn,nums,depth,heat,opts){
+  const core=evalCore(fn,nums,depth);
+  if(core.cnt<3) return null;
+  const hit=[0,0,0],bull=[0,0,0];
+  for(let k=0;k<core.cnt;k++){
+    for(let j=0;j<3;j++){
+      const n=core.cands[k][j]; if(n===undefined) continue;
+      const dd=pocketDist(n,nums[k]);
+      if(dd<=HK) hit[j]++;
+      if(dd<=1) bull[j]++;
+    }
+  }
+  const byHit=[0,1,2].filter(j=>core.cands[0][j]!==undefined).sort((a,b)=>(hit[b]-hit[a])||(bull[b]-bull[a]));
+  const wl=[], wlSpin=[], wlBet=[], wlCover=[];
+  let cW=0,cT=0,nW=0,nT=0,st=0,nt=0,bb=0;
+  const nb=Math.min(25,core.cnt);
+  for(let k=0;k<core.cnt;k++){
+    const h=nums.slice(k+1);                    // history available at that time (index 0 = newest then)
+    const cands=fn(h)||[];
+    const rank=localRank(cands,h);              // ranking from PAST data only -> no look-ahead
+    const picks=(opts&&opts.betFn)?opts.betFn(h,rank,heat):chooseBet(cands,rank,heat,h);
+    if(!picks.length) continue;
+    const win=covHas(picks,nums[k]);
+    let near=false;
+    for(const p of picks) if(pocketDist(p.n,nums[k])<=1){near=true;break;}
+    wl.push(win?'W':'L');
+    const _csz=covSize(picks); wlSpin.push(nums[k]); wlBet.push(picks); wlCover.push(_csz);
+    if(win){cW++; if(k<nb)nW++;} cT++; if(k<nb)nT++;
+    st+=_csz; nt+= win?36-_csz:-_csz;
+    if(near) bb++;
+  }
+  if(!cT) return null;
+  let conf=0; for(const d of core.dist){ if(d<=2) conf++; else break; }
+  const nowCands=fn(nums)||[];
+  const nowRank=localRank(nowCands,nums);
+  const now=(opts&&opts.betFn)?opts.betFn(nums,nowRank,heat):chooseBet(nowCands,nowRank,heat,nums);
+  return {fn:fn, betFn:(opts&&opts.betFn)||null, picks:now, pair:now.slice(0,2), third:now[2]||null, byHit:byHit,
+    wlSpin:wlSpin, wlBet:wlBet, wlCover:wlCover,
+    posHit:[hit[0]/core.cnt,hit[1]/core.cnt,hit[2]/core.cnt],
+    posBull:[bull[0]/core.cnt,bull[1]/core.cnt,bull[2]/core.cnt],
+    wl:wl, cW:cW, cT:cT, cur:cW/cT, next:nT?nW/nT:0, cov:st/cT/N, roi:st?r1(nt/st*100):0,
+    bull:bb/cT, conf:conf, avgD:core.dist.length?r1(avg(core.dist)):0, tries:cT,
+    recent:hitRate(lastN(wl,16)), maxLoss:maxLossStreak(wl), cands:nowCands};
+}
+
+/* ---------- 4. COMBO (ENSEMBLE VOTING + DISJOINT ANCHOR MERGE) ---------- */
+function comboEnsembleBet(h,topStrats){
+  if(!ARC) buildArcs();
+  const votes=new Float64Array(N);
+  const anchors=[];
+  for(let i=0;i<topStrats.length;i++){
+    const s=topStrats[i];
+    const w=(i===0?1.35:(i===1?1.0:0.75))*Math.max(0.4,s.cur||0.5);
+    const p=s.betFn?s.betFn(h,null,null):chooseBet(s.fn(h)||[],[0,1,2],null,h);
+    for(const q of (p||[])){
+      if(POS[q.n]===undefined) continue;
+      if(anchors.indexOf(q.n)<0) anchors.push(q.n);
+      const base=q.n*N;
+      for(let x=0;x<N;x++) if(ARC[base+x]) votes[x]+=w;
+      votes[q.n]+=w*0.6;
+    }
+  }
+  if(anchors.length>=2 && sepOk(anchors[0],anchors[1])) return pairBet9(anchors[0],anchors[1]);
+  let bestPair=null, bestSc=-1e9;
+  for(let a=0;a<N;a++){
+    let sa=0; const aBase=a*N;
+    for(let x=0;x<N;x++) if(ARC[aBase+x]) sa+=votes[x];
+    for(let b=a+1;b<N;b++){
+      if(!sepOk(a,b)) continue;
+      let sb=sa; const bBase=b*N;
+      for(let x=0;x<N;x++) if(ARC[bBase+x]) sb+=votes[x];
+      if(sb>bestSc){ bestSc=sb; bestPair=[a,b]; }
+    }
+  }
+  return bestPair?pairBet9(bestPair[0],bestPair[1]):makeBet(h[0],h);
+}
+
+function offsetRows(nums,depth,heat){
+  const d=Math.min(depth,55);
+  return RULE_DEFS.map(def=>{
+    const e=evaluate(h=>rulePreds(h,def),nums,d,heat,{betFn:h=>offsetBetForRule(h,def)});
+    if(!e) return {def:def,avgD:99,conf:0,cur:0,next:0,cov:0.49,wl:[],recent:0,score:-99,e:null};
+    const score=scoreStrategy(e);
+    return {def:def,avgD:e.avgD,conf:e.conf,cur:e.cur,next:e.next,cov:e.cov,wl:e.wl,recent:hitRate(lastN(e.wl,16)),score:score,e:e};
+  });
+}
+function bestModelEval(models,makeFn,makeBetFn,nums,depth,heat){
+  const d=Math.min(depth,55);
+  let bestE=null, bestM=models[0], bestSc=-1e9;
+  for(const m of models){
+    const e=evaluate(h=>makeFn(h,m),nums,d,heat,{betFn:h=>makeBetFn(h,m)});
+    if(!e) continue;
+    const sc=scoreStrategy(e);
+    if(sc>bestSc){ bestSc=sc; bestE=e; bestM=m; }
+  }
+  if(bestE && depth>d){
+    const full=evaluate(h=>makeFn(h,bestM),nums,depth,heat,{betFn:h=>makeBetFn(h,bestM)});
+    if(full) bestE=full;
+  }
+  return {e:bestE, model:bestM};
+}
+function buildStrategies(nums,depth){
+  const heat=tableHeat(nums);
+  const rows=offsetRows(nums,depth,heat);
+  const topOff=sortOffset(rows,PRED.ruleSel)[0];
+  const def=topOff.def;
+  const out=[];
+  const pushEval=(k,name,e,src,extra)=>{
+    if(!e) return;
+    e.k=k; e.name=name; e.src=src; if(extra) e.extra=extra;
+    e.score=scoreStrategy(e);
+    out.push(e);
+  };
+  if(stratOn('OFFSET')){
+    const e=(depth<=55&&topOff.e)?topOff.e:evaluate(h=>rulePreds(h,def),nums,depth,heat,{betFn:h=>offsetBetForRule(h,def)});
+    pushEval('OFFSET','1 · OFFSET STRATEGY',e,SRC_OFFSET,{rule:def,rows:rows});
+  }
+  if(stratOn('TARGET')){
+    const r=bestModelEval(TARGET_MODELS,(h,m)=>hotNums(h,m),(h,m)=>targetModelPicks(h,m),nums,depth,heat);
+    pushEval('TARGET','2 · TARGET STRATEGY',r.e,SRC_TARGET,{model:r.model});
+  }
+  if(stratOn('SIGNATURE')){
+    const r=bestModelEval(SIG_MODELS,(h,m)=>sigNums(h,m),(h,m)=>sigModelPicks(h,m),nums,depth,heat);
+    const st=sigStats(nums,depth); st.model=r.model;
+    pushEval('SIGNATURE','3 · DEALER SIGNATURE',r.e,SRC_SIG,st);
+  }
+  if(stratOn('PRIV1')){
+    const r=bestModelEval(PRIV_MODES,priv1Cands,(h,m)=>priv1ModelBet(h,m),nums,depth,heat);
+    pushEval('PRIV1','5 · LAST SPIN + NEIGHBOURS',r.e,SRC_PRIV1,{anchor:nums[0],mode:'last',model:r.model});
+  }
+  if(stratOn('PRIV2')){
+    const r=bestModelEval(PRIV_MODES,priv2Cands,(h,m)=>priv2ModelBet(h,m),nums,depth,heat);
+    pushEval('PRIV2','6 · OPPOSITE + NEIGHBOURS',r.e,SRC_PRIV2,{anchor:nums[0],opp:oppositeNum(nums[0]),mode:PRED.opp,model:r.model});
+  }
+  if(stratOn('PRIV3')){
+    const r=bestModelEval(PRIV3_MODES,priv3Cands,(h,m)=>priv3ModelBet(h,m),nums,depth,heat);
+    pushEval('PRIV3','7 · LAST 9 + OPPOSITE 9',r.e,SRC_PRIV3,{anchor:nums[0],opp:oppositeNum(nums[0]),mode:PRED.opp,model:r.model});
+  }
+  if(stratOn('MARKOV')){
+    const r=bestModelEval(MARKOV_MODELS,(h,m)=>markovCands(h,m),(h,m)=>markovModelPicks(h,m),nums,depth,heat);
+    pushEval('MARKOV','8 · MARKOV SECTOR FLOW',r.e,SRC_MARKOV,{model:r.model,anchor:nums[0]});
+  }
+  if(stratOn('COMBO')){
+    const topStrats=out.slice().sort((a,b)=>scoreStrategy(b)-scoreStrategy(a)).slice(0,3);
+    if(topStrats.length>=2){
+      const cFn=h=>comboEnsembleBet(h,topStrats).map(x=>x.n);
+      const cBet=h=>comboEnsembleBet(h,topStrats);
+      const e=evaluate(cFn,nums,depth,heat,{betFn:cBet});
+      if(e){
+        e.k='COMBO'; e.name='4 · COMBO (BEST 2)'; e.src=SRC_COMBO;
+        e.extra={base:[topStrats[0].k,topStrats[1].k]};
+        e.score=scoreStrategy(e); out.push(e);
+      }
+    }
+  }
+  out.sort((a,b)=>(STRAT_ORDER[a.k]||99)-(STRAT_ORDER[b.k]||99));
+  const best=out.slice().sort((a,b)=>scoreStrategy(b)-scoreStrategy(a))[0];
+  out.forEach(s=>{ s.star=(s===best); s.score=scoreStrategy(s); });
+  return out;
+}
+
+/* ---------- lobby quick scan + unified continuous table stats ---------- */
+function buildLobbyStatFromList(id,nums,list){
+  if(!list||!list.length) return null;
+  const best=list.filter(s=>s.star)[0]||list.slice().sort((a,b)=>scoreStrategy(b)-scoreStrategy(a))[0];
+  if(!best) return null;
+  const J=stratJournal(id,best.k);
+  const jr=(JOURNAL[id]||[]).filter(r=>!r.skipped);
+  const liveW=J.n>0?J.w:jr.filter(r=>r.win).length;
+  const liveL=J.n>0?(J.n-J.w):(jr.length-jr.filter(r=>r.win).length);
+  const btW=best.cW!==undefined?best.cW:best.wl.filter(c=>c==='W').length;
+  const btL=(best.cT!==undefined?best.cT:best.wl.length)-btW;
+  const combWL=(J.n>0?J.wl:[]).concat(best.wl);
+  const combSpin=(J.n>0?J.spin:[]).concat(best.wlSpin);
+  const combBet=(J.n>0?J.bet:[]).concat(best.wlBet);
+  const totalW=btW+liveW, totalL=btL+liveL, totalN=totalW+totalL;
+  const curRate=totalN>0?(totalW/totalN):best.cur;
+  return {
+    k:best.k, cur:curRate, next:best.next, cov:best.cov||0.4865, picks:best.picks,
+    edge:curRate-(best.cov||0.4865),
+    totalW:totalW, totalL:totalL, liveW:liveW, liveL:liveL,
+    wl:combWL.slice(0,WL_SHOW), wlSpin:combSpin.slice(0,WL_SHOW), wlBet:combBet.slice(0,WL_SHOW),
+    score:scoreStrategy(best), maxLoss:maxLossStreak(combWL)
+  };
+}
+function lobbyStats(nums,id){
+  const depth=Math.min(Math.max(nums.length-3,4),50);
+  if(depth<3) return null;
+  const list=buildStrategies(nums,depth);
+  return buildLobbyStatFromList(id||'',nums,list);
+}
+function lobbyCached(id){
+  const t=state.tables[id];
+  if(!t||t.numbers.length<8) return null;
+  const sig=t.numbers.slice(0,20).join(',')+'|'+enabledKey()+'|'+PRED.opp+'|'+PRED.ruleSel;
+  const c=LOBBY.stats[id];
+  if(c&&c.sig===sig) return c.st;
+  const st=lobbyStats(t.numbers.slice(0,90),id);
+  LOBBY.stats[id]={sig:sig,numSig:t.numbers.slice(0,20).join(','),st:st};
+  LOBBY.fresh=true;
+  return st;
+}
+function updateGlobalWLHeader(){
+  let allW=0, allL=0, liveW=0, liveL=0;
+  for(const id in state.tables){
+    if(!isRouletteTable(id)) continue;
+    const c=LOBBY.stats[id];
+    if(c&&c.st){
+      allW+=(c.st.totalW||0);
+      allL+=(c.st.totalL||0);
+    }
+    const jr=(JOURNAL[id]||[]).filter(r=>!r.skipped);
+    for(const r of jr){ if(r.win) liveW++; else liveL++; }
+  }
+  const elAll=document.getElementById('allTablesWL');
+  if(elAll){
+    const tot=allW+allL;
+    elAll.textContent=tot?(allW.toLocaleString()+'W / '+allL.toLocaleString()+'L ('+Math.round(allW/tot*100)+'%)'):'0W / 0L';
+  }
+  const elLive=document.getElementById('liveSessionWL');
+  if(elLive){
+    const ltot=liveW+liveL;
+    elLive.textContent=ltot?(liveW.toLocaleString()+'W / '+liveL.toLocaleString()+'L ('+Math.round(liveW/ltot*100)+'%)'):'0W / 0L (waiting for spin)';
+  }
+}
+
+/* ---------- rendering ---------- */
+function travelSVG(roll,ref){
+  if(!roll||roll.length<3) return '';
+  const W=300,H=44,pad=4;
+  let lo=Math.min.apply(null,roll.concat([ref])), hi=Math.max.apply(null,roll.concat([ref]));
+  const pad2=(hi-lo<1)?1:0; lo-=pad2; hi+=pad2;
+  const X=i=>pad+i*(W-2*pad)/Math.max(1,roll.length-1);
+  const Y=v=>H-pad-(v-lo)*(H-2*pad)/(hi-lo);
+  const pts=roll.map((v,i)=>X(i).toFixed(1)+','+Y(v).toFixed(1)).join(' ');
+  return '<svg viewBox="0 0 '+W+' '+H+'" class="tsvg"><polyline points="'+pts+'"/>'+
+    '<line class="tref" x1="'+pad+'" y1="'+Y(ref).toFixed(1)+'" x2="'+(W-pad)+'" y2="'+Y(ref).toFixed(1)+'"/>'+
+    '<circle class="tdot" cx="'+X(roll.length-1).toFixed(1)+'" cy="'+Y(roll[roll.length-1]).toFixed(1)+'" r="3"/></svg>';
+}
+function hitCol(v,base){const b=(base&&base<=1)?base:0.4865;return v>=b+0.08?'var(--green)':(v>=b-0.015?'var(--primary)':'var(--red)');}
+function edgeCol(e){return e>3?'var(--green)':e>0?'var(--primary)':'var(--red)';}
+function numChip(n,cls){
+  return '<span class="pnum '+(cls||'')+'" style="background:'+numBg(n)+';color:'+numColor(n)+';border:'+numBorder(n)+'">'+dsp(n)+'<i>n9</i></span>';
+}
+function pickChip(p,cls){
+  const k=2*p.r+1, i=k/2;
+  return '<span class="pnum '+(cls||'')+'" style="background:'+numBg(p.n)+';color:'+numColor(p.n)+';border:'+numBorder(p.n)+
+    (cls==='fill'?';opacity:.7;border-style:dashed':'')+'" title="'+dsp(p.n)+'n'+k+' = '+k+' pockets">'+dsp(p.n)+'<i>n'+k+'</i></span>';
+}
+function mChips(a){return '<div class="pmeta">'+a.map(x=>'<span>'+x[0]+' <b style="color:'+(x[2]||'var(--fg)')+'">'+x[1]+'</b></span>').join('')+'</div>';}
+function strList(l){return l.map(n=>dsp(n)+'n9').join(' ');}
+function pickList(p){return p.map(x=>label(x)).join(' ');}
+function wlStrip(wl,n,ctx){
+  const s=(wl||[]).slice(0,n||WL_SHOW);   // index 0 = newest -> drawn on the LEFT
+  if(!s.length) return '<div class="plabel"><span style="font-family:Orbitron;font-size:.5rem;color:var(--muted)">collecting…</span></div>';
+  return '<div class="plabel">'+
+    '<span class="wl-dir">NEW ◀</span>'+
+    s.map((c,i)=>{
+      let tip='';
+      if(ctx&&ctx.spin&&ctx.bet&&ctx.spin[i]!==undefined){
+        tip=' title="#'+(i+1)+'  spin '+dsp(ctx.spin[i])+'  ·  bet '+pickList(ctx.bet[i]||[])+
+            '  ·  '+(c==='W'?'covered':'NOT covered')+'  →  '+c+'"';
+      }
+      return '<span class="wl '+c+'"'+tip+'>'+c+'</span>';
+    }).join('')+
+    '<span class="wl-dir" style="margin-left:.3rem">▶ OLD</span></div>';
+}
+function streakOf(wl){
+  if(!wl.length) return '–';
+  const c=wl[0]; let n=0;                                  // wl[0] = newest
+  for(let i=0;i<wl.length;i++){ if(wl[i]===c) n++; else break; }
+  return n+c;
+}
+function srcNote(s){
+  const acc=n=>{const i=s.cands.indexOf(n); if(i<0) return null; const r=s.byHit.indexOf(i); return s.posHit[r>=0?r:i];};
+  const pairTxt=s.pair.map(p=>dsp(p.n)+'n9 '+(acc(p.n)===null?'':pct(acc(p.n))+'%')).join(' + ');
+  return '<b>'+s.picks.map(label).join(' + ')+'</b> · two n9 blocks, centres at wheel distance '+
+    (s.picks.length>1?Math.max(...s.picks.map(p=>ringDist(s.picks[0].n,p.n))):0)+
+    ' → <b>'+unionOf(s.picks).size+' pockets</b> · '+pairTxt;
+}
+function stratCard(s){
+  const cov=unionOf(s.picks).size;
+  const covFrac=cov/N;
+  const conf=confidenceOf(s);
+  const J=journalStrip(state.selected,s.k);
+  const LIVE=J.n>0;
+  /* Combine live-recorded spins with the walk-forward history so W/L counts
+     grow continuously with every spin and never reset or show a 1-spin jump. */
+  const btW=s.cW!==undefined?s.cW:s.wl.filter(c=>c==='W').length;
+  const btL=(s.cT!==undefined?s.cT:s.wl.length)-btW;
+  const totW=btW+(LIVE?J.w:0);
+  const totL=btL+(LIVE?(J.n-J.w):0);
+  const totN=totW+totL;
+  const wlNow=LIVE?J.wl.concat(s.wl):s.wl;
+  const spinNow=LIVE?J.spin.concat(s.wlSpin):s.wlSpin;
+  const betNow=LIVE?J.bet.concat(s.wlBet):s.wlBet;
+  const HAS=wlNow.length>0;
+  const rate=totN>0?(totW/totN):s.cur;
+  const edgeNow=rate-covFrac;
+  const recentNow=HAS?hitRate(wlNow.slice(0,16)):s.recent;
+  const maxLossNow=HAS?maxLossStreak(wlNow):s.maxLoss;
+  const streakNow=streakOf(wlNow);
+  const roiNow=HAS?r1(wlNow.reduce((a,c)=>a+(c==='W'?(36-cov):-cov),0)/wlNow.length/cov*100):s.roi;
+  const srcTag=LIVE?('<span class="conf-pill good">TOTAL '+totW+'W/'+totL+'L · LIVE '+J.w+'W/'+(J.n-J.w)+'L</span>')
+                    :('<span class="conf-pill ok">TRACKED '+totW+'W/'+totL+'L ('+totN+' spins)</span>');
+  let extra='';
+  const tNums=(state.tables[state.selected]&&state.tables[state.selected].numbers)||[];
+  if(s.k==='OFFSET'){
+    const rows=sortOffset(s.extra.rows,'auto').slice(0,3);
+    extra=rows.map(r=>'<div class="prow'+(r.def===s.extra.rule?' best':'')+'"><span>Playing '+r.def.n+' · win '+pct(r.cur)+'% · conf '+r.conf+
+      '</span><b>'+strList(rulePreds(tNums.slice(0,6),r.def).slice(0,2))+'</b></div>').join('');
+    extra+='<div class="pnote">Rule '+s.extra.rule.n+': '+s.extra.rule.note+'. Auto-selects the highest-accuracy jump/phase rule on this table.</div>';
+  } else if(s.k==='TARGET'){
+    const mName=(s.extra&&s.extra.model&&s.extra.model.name)||'Adaptive Sector Heat';
+    extra='<div class="prow'+(rate>=covFrac+0.06?' best':'')+'"><span>Active model: <b>'+mName+'</b></span><b>'+pct(rate)+'%</b></div>'+
+      '<div class="pnote">Multi-horizon 9-pocket sector heat + repeater density + sleeper rebound. Optimizes the joint 18-pocket union.</div>';
+  } else if(s.k==='SIGNATURE'){
+    const g=s.extra;
+    const mName=(g&&g.model&&g.model.name)||'Circular Ballistics';
+    extra=travelSVG(g.roll,g.ref)+'<div class="prow best"><span>'+(g.over?'TOP (OVER)':'TOP (UNDER)')+' · '+mName+'</span><b>'+pickList(s.picks)+'</b></div>'+
+      mChips([['DIR',(g.meanJ>0?'+':'')+g.meanJ+'p',g.meanJ>=0?'var(--teal)':'var(--red)'],['PHASE',pct(g.dirCons)+'%'],['TRAVEL',g.meanAbs+'p']])+
+      '<div class="pnote">Tracks both same-hand and alternating-hand croupier release rhythm + rotor phase velocity.</div>';
+  } else if(s.k==='COMBO'){
+    extra='<div class="prow best"><span>Ensemble consensus: '+s.extra.base.join(' + ')+'</span><b>'+pickList(s.picks)+'</b></div>'+
+      '<div class="pnote">Combines pocket probability votes from the top-performing strategies on this table into two non-overlapping n9 sectors.</div>';
+  } else if(s.k==='PRIV1'){
+    const mName=(s.extra&&s.extra.model&&s.extra.model.name)||'Markov + Heat Partner';
+    extra='<div class="prow best"><span>Anchor: last spin <b style="color:var(--primary)">'+dsp(s.extra.anchor)+'</b> · '+mName+'</span><b>'+pickList(s.picks)+'</b></div>'+
+      '<div class="pnote">Locks n9 on the last spin and pairs it with the highest-scoring non-overlapping partner sector.</div>';
+  } else if(s.k==='PRIV2'){
+    const mName=(s.extra&&s.extra.model&&s.extra.model.name)||'Markov + Heat Partner';
+    extra='<div class="prow best"><span>Anchor: opposite of '+dsp(s.extra.anchor)+' → <b style="color:var(--primary)">'+dsp(s.extra.opp)+'</b> ('+(s.extra.mode==='wheel'?'wheel':'board')+')</span><b>'+pickList(s.picks)+'</b></div>'+
+      '<div class="pnote">Locks n9 on the opposite of the last spin ('+mName+') and pairs it with the strongest disjoint sector.</div>';
+  } else if(s.k==='PRIV3'){
+    const mName=(s.extra&&s.extra.model&&s.extra.model.name)||'Exact Mirror + Minimal Shift';
+    extra='<div class="prow best"><span>Last <b>'+dsp(s.extra.anchor)+'</b> n9 + opposite <b>'+dsp(s.extra.opp)+'</b> n9 · '+mName+'</span><b>'+pickList(s.picks)+'</b></div>'+
+      '<div class="pnote">Covers both the last spin and its opposite with two non-overlapping 9-pocket arcs (18 unique pockets).</div>';
+  } else if(s.k==='MARKOV'){
+    const mName=(s.extra&&s.extra.model&&s.extra.model.name)||'1st & 2nd Order Markov';
+    extra='<div class="prow best"><span>Transition from <b style="color:var(--primary)">'+dsp(s.extra.anchor)+'</b> · '+mName+'</span><b>'+pickList(s.picks)+'</b></div>'+
+      '<div class="pnote">Learns pocket-to-sector Markov transition probabilities and relative wheel step kernels from this table’s spin history.</div>';
+  }
+  return '<div class="pcard'+(s.star?' starred':'')+'">'+
+    '<h4>'+s.name+'<span class="pscore">WIN '+pct(rate)+'% ('+totW+'W/'+totL+'L)</span></h4>'+
+    '<div style="margin:-.2rem 0 .35rem"><span class="conf-pill '+conf.cls+'">'+conf.label+'</span> '+srcTag+'</div>'+
+    '<div class="pnums">'+s.picks.map((p,i)=>pickChip(p,i>1?'fill':'')).join('')+'</div>'+
+    wlStrip(wlNow,WL_SHOW,{spin:spinNow,bet:betNow})+extra+
+    mChips([['WIN',pct(rate)+'%',hitCol(rate,covFrac)],
+            ['EDGE',(edgeNow>=0?'+':'')+pct(edgeNow)+'%',edgeCol(edgeNow*100)],
+            ['RECENT',pct(recentNow)+'%',hitCol(recentNow,covFrac)],
+            ['W / L',totW+'W / '+totL+'L','var(--teal)'],
+            ['MAX LOSS',maxLossNow+'L'],['ROI',roiNow+'%',roiNow>=0?'var(--green)':'var(--red)'],
+            ['STREAK',streakNow],['POCKETS',cov]])+
+    '<div class="pnote">'+srcNote(s)+'</div></div>';
+}
+/* Honest accuracy + house-edge accounting for the current bet. */
+function renderAccuracy(best,nums){
+  const row=document.getElementById('accRow'), note=document.getElementById('accNote');
+  if(!row||!best) return;
+  const cov=unionOf(best.picks).size||18;
+  const ceiling=cov/N;
+  const jr=(JOURNAL[state.selected]||[]).filter(r=>!r.skipped);
+  const liveWL=jr.map(r=>r.win?'W':'L');
+  const wl=liveWL.concat(best.wl||[]);
+  const src=jr.length?('continuous tracking ('+jr.length+' live + '+(best.wl||[]).length+' historical spins)'):'walk-forward backtest';
+  const wins=wl.filter(c=>c==='W').length, n=wl.length;
+  const measured=n?wins/n:0;
+  const se=n?Math.sqrt(Math.max(1e-9,measured*(1-measured))/n):0;
+  const evPerSpin=(ceiling*36-cov);
+  const evPct=evPerSpin/cov*100;
+  const cold=maxLossStreak(wl);
+  const cur=lossStreak(wl);
+  const chip=(label,value,color,sub)=>'<div class="stat-chip"><b style="color:'+(color||'var(--fg)')+'">'+value+'</b><small>'+
+      label+'</small>'+(sub?'<div style="font-size:.62rem;color:var(--muted);font-family:Orbitron,monospace">'+sub+'</div>':'')+'</div>';
+  row.innerHTML=
+    chip('COVERAGE', cov+'/37', 'var(--teal)', (ceiling*100).toFixed(2)+'%')+
+    chip('WIN RATIO', n?(measured*100).toFixed(1)+'%':'—', hitCol(measured,ceiling), wins+'W / '+(n-wins)+'L · n='+n)+
+    chip('LIVE SESSION', jr.length?(jr.filter(r=>r.win).length+'W / '+(jr.length-jr.filter(r=>r.win).length)+'L'):'0W / 0L', 'var(--primary)', 'continuous on table')+
+    chip('COLD RUN', cur+' now', cur>=4?'var(--red)':'var(--muted)', 'worst '+cold);
+  if(note) note.innerHTML=
+    'Measured from <b>'+src+'</b>. Total continuous record on this table: <b>'+wins+'W / '+(n-wins)+'L ('+
+    (n?(measured*100).toFixed(1)+'%':'no data')+')</b>. Baseline coverage is <b>'+cov+' of 37 pockets ('+(ceiling*100).toFixed(2)+'%)</b>.';
+}
+
+/* ---------- CONTINUOUS ALL-TABLE W/L JOURNAL ENGINE ----------
+   Tracks every spin across ALL tables continuously, including repeaters (e.g. 17 -> 17)
+   and multi-spin batch updates, without ever truncating at 10 spins. */
+const JOURNAL={};    // id -> [{spin, bet, win, skipped}] (up to MAX_JOURNAL=500)
+const LASTPICK={};   // id -> picks currently standing for the next spin
+const SEEN_ARR={};   // id -> previous spin array snapshot for exact shift/repeater detection
+const SJ={};         // tableId -> { stratKey -> [{spin,bet,win,skipped}] }
+const SL={};         // tableId -> { stratKey -> picks standing for the NEXT spin }
+const STSEEN_ARR={}; // tableId -> previous spin array snapshot for strategies
+
+function recordTableSpin(id, spinVal, bet){
+  if(!bet || !bet.length) return;
+  const copy=bet.map(q=>({n:q.n,r:q.r}));
+  JOURNAL[id]=JOURNAL[id]||[];
+  JOURNAL[id].unshift({spin:spinVal, bet:copy, win:covHas(copy,spinVal), skipped:false});
+  if(JOURNAL[id].length>MAX_JOURNAL) JOURNAL[id].length=MAX_JOURNAL;
+}
+function journalUpdate(id,nums){
+  if(!id || !nums || !nums.length) return;
+  const prev=SEEN_ARR[id];
+  if(prev && prev.length>=4){
+    const shift=detectNewSpinShift(prev, nums);
+    if(shift>=1 && LASTPICK[id] && LASTPICK[id].length){
+      // Score the standing bet against the spin that followed `prev` (`nums[shift-1]`)
+      recordTableSpin(id, nums[shift-1], LASTPICK[id]);
+      // If >1 spins arrived in one batch, walk-forward score each intermediate spin
+      for(let s=shift-2; s>=0; s--){
+        const sub=nums.slice(s+1);
+        if(sub.length>=8){
+          const d=Math.min(Math.max(sub.length-3,4),45);
+          const l=buildStrategies(sub,d);
+          const b=l.filter(x=>x.star)[0]||l[0];
+          if(b&&b.picks&&b.picks.length) recordTableSpin(id, nums[s], b.picks);
+        }
+      }
+      saveJournals(id);
+    }
+  }
+  SEEN_ARR[id]=nums.slice(0,25);
+}
+function journalRows(id,n){
+  const j=JOURNAL[id]||[];
+  return j.slice(0,n||30);
+}
+function scoreStrategies(id,nums,list){
+  if(!id || !nums || !nums.length) return;
+  const prev=STSEEN_ARR[id];
+  SJ[id]=SJ[id]||{}; SL[id]=SL[id]||{};
+  if(prev && prev.length>=4){
+    const shift=detectNewSpinShift(prev, nums);
+    if(shift>=1){
+      const targetSpin=nums[shift-1];
+      for(const k in SL[id]){
+        const bet=SL[id][k]; if(!bet||!bet.length) continue;
+        const copy=bet.map(q=>({n:q.n,r:q.r}));
+        SJ[id][k]=SJ[id][k]||[];
+        SJ[id][k].unshift({spin:targetSpin,bet:copy,win:covHas(copy,targetSpin),skipped:false});
+        if(SJ[id][k].length>MAX_JOURNAL) SJ[id][k].length=MAX_JOURNAL;
+      }
+      for(let s=shift-2; s>=0; s--){
+        const sub=nums.slice(s+1);
+        if(sub.length>=8){
+          const d=Math.min(Math.max(sub.length-3,4),45);
+          const l=buildStrategies(sub,d);
+          for(const st of l){
+            if(!st.picks||!st.picks.length) continue;
+            const copy=st.picks.map(q=>({n:q.n,r:q.r}));
+            SJ[id][st.k]=SJ[id][st.k]||[];
+            SJ[id][st.k].unshift({spin:nums[s],bet:copy,win:covHas(copy,nums[s]),skipped:false});
+            if(SJ[id][st.k].length>MAX_JOURNAL) SJ[id][st.k].length=MAX_JOURNAL;
+          }
+        }
+      }
+    }
+  }
+  STSEEN_ARR[id]=nums.slice(0,25);
+  for(const s of list){ if(s.picks&&s.picks.length) SL[id][s.k]=s.picks.map(q=>({n:q.n,r:q.r})); }
+  saveJournals(id);
+}
+
+/* ---------- BACKGROUND W/L ENGINE FOR ALL TABLES ---------- */
+const BG={sig:{},q:[],busy:false,done:0};
+function bgEnqueue(id){
+  if(!id) return;
+  const t=state.tables[id];
+  if(!t||!t.numbers||t.numbers.length<8) return;
+  const sig=t.numbers.length+':'+t.numbers.slice(0,12).join(',');
+  if(BG.sig[id]===sig) return;
+  if(BG.q.indexOf(id)<0) BG.q.push(id);
+  bgKick();
+}
+function bgKick(){
+  if(BG.busy) return;
+  BG.busy=true;
+  const step=function(){
+    const t0=(window.performance&&performance.now)?performance.now():Date.now();
+    let n=0;
+    while(BG.q.length && (((window.performance&&performance.now)?performance.now():Date.now())-t0)<12){
+      bgWork(BG.q.shift()); n++;
+    }
+    BG.done+=n;
+    updateGlobalWLHeader();
+    if(BG.q.length){ setTimeout(step,20); } else { BG.busy=false; }
+  };
+  setTimeout(step,0);
+}
+function bgWork(id){
+  try{
+    const t=state.tables[id];
+    if(!t||!t.numbers||t.numbers.length<8) return;
+    if(!isRouletteTable(id)) return;
+    const nums=t.numbers.slice(0,PRED.depth).filter(n=>Number.isInteger(n)&&POS[n]!==undefined);
+    if(nums.length<8) return;
+    const sig=t.numbers.length+':'+nums.slice(0,12).join(',');
+    if(BG.sig[id]===sig) return;
+    // 1) score the bet that was standing for this spin
+    journalUpdate(id,nums);
+    // 2) recompute every strategy
+    const depth=Math.min(Math.max(nums.length-3,4),PRED.depth,65);
+    const list=buildStrategies(nums,depth);
+    if(!list||!list.length) return;
+    const best=list.filter(s=>s.star)[0]||list[0];
+    if(best&&best.picks&&best.picks.length) LASTPICK[id]=best.picks;
+    // 3) score per-strategy bets and store new standing bets
+    scoreStrategies(id,nums,list);
+    // 4) update cached lobby stats immediately so lobby card W/L is always fresh
+    const st=buildLobbyStatFromList(id,nums,list);
+    const lSig=t.numbers.slice(0,20).join(',')+'|'+enabledKey()+'|'+PRED.opp+'|'+PRED.ruleSel;
+    LOBBY.stats[id]={sig:lSig,numSig:t.numbers.slice(0,20).join(','),st:st};
+    const cardEl=document.querySelector('.tcard[data-id="'+id+'"] .card-best');
+    if(cardEl && st) cardEl.innerHTML=cardBestInner(st,id);
+    BG.sig[id]=sig;
+  }catch(e){}
+}
+/* safety sweep: every 2.5s pick up any table whose newest spin changed */
+function bgSweep(){ for(const id in state.tables) bgEnqueue(id); }
+setTimeout(function(){ bgSweep(); setInterval(bgSweep,2500); },1200);
+
+/* Persist continuous W/L journals and accumulated spin history in localStorage */
+const JKEY=function(id){ return 'rp_wl_'+id; };
+function saveJournals(id){
+  try{
+    const top=(JOURNAL[id]||[]).slice(0,120);
+    const per={};
+    for(const k in (SJ[id]||{})) per[k]=(SJ[id][k]||[]).slice(0,120);
+    const t=state.tables[id];
+    const spins=(t&&t.numbers)?t.numbers.slice(0,160):[];
+    localStorage.setItem(JKEY(id), JSON.stringify({
+      top:top, per:per, spins:spins,
+      lastPick:LASTPICK[id]||null, sl:SL[id]||null,
+      seen:SEEN_ARR[id]||null, stSeen:STSEEN_ARR[id]||null,
+      t:Date.now()
+    }));
+  }catch(e){}
+}
+function loadJournals(id){
+  try{
+    const raw=localStorage.getItem(JKEY(id)); if(!raw) return false;
+    const o=JSON.parse(raw); if(!o) return false;
+    const fix=r=>({spin:r.spin, bet:(r.bet||[]).map(q=>({n:q.n,r:q.r})), win:!!r.win, skipped:!!r.skipped});
+    if(o.top&&o.top.length) JOURNAL[id]=o.top.slice(0,MAX_JOURNAL).map(fix);
+    if(o.per){
+      SJ[id]=SJ[id]||{};
+      for(const k in o.per){ if(o.per[k]&&o.per[k].length) SJ[id][k]=o.per[k].slice(0,MAX_JOURNAL).map(fix); }
+    }
+    if(o.lastPick) LASTPICK[id]=o.lastPick;
+    if(o.sl) SL[id]=o.sl;
+    if(o.seen) SEEN_ARR[id]=o.seen;
+    if(o.stSeen) STSEEN_ARR[id]=o.stSeen;
+    if(o.spins && Array.isArray(o.spins) && o.spins.length>=8){
+      const t=ensureTable(id);
+      if(!t.numbers || !t.numbers.length) t.numbers=o.spins;
+      else t.numbers=mergeSpins(o.spins, t.numbers);
+    }
+    return true;
+  }catch(e){ return false; }
+}
+function stratJournal(id,k){
+  const m=SJ[id]&&SJ[id][k];
+  if(!m) return {wl:[],bet:[],spin:[],rate:null,n:0,w:0,skipped:0};
+  const scored=m.filter(r=>!r.skipped);
+  const w=scored.filter(r=>r.win).length;
+  return {
+    rows:m,
+    wl:scored.map(r=>r.win?'W':'L'),
+    bet:scored.map(r=>r.bet),
+    spin:scored.map(r=>r.spin),
+    rate:scored.length?(w/scored.length):null,
+    n:scored.length,
+    w:w,
+    skipped:m.length-scored.length
+  };
+}
+function journalStrip(id,stratKey){
+  const j=stratJournal(id,stratKey);
+  if(j.n>0) return j;
+  const jr=(JOURNAL[id]||[]).filter(r=>!r.skipped);
+  if(jr.length){
+    return { rows:JOURNAL[id], wl:jr.map(r=>r.win?'W':'L'), bet:jr.map(r=>r.bet),
+             spin:jr.map(r=>r.spin), rate:null, n:0, w:0, skipped:0, borrowed:true };
+  }
+  return j;
+}
+/* ---------- graphical European wheel ---------- */
+function polarXY(cx,cy,r,angDeg){ const a=(angDeg-90)*Math.PI/180; return [cx+r*Math.cos(a), cy+r*Math.sin(a)]; }
+function segPath(cx,cy,rIn,rOut,a0,a1){
+  const p0=polarXY(cx,cy,rOut,a0), p1=polarXY(cx,cy,rOut,a1);
+  const p2=polarXY(cx,cy,rIn,a1),  p3=polarXY(cx,cy,rIn,a0);
+  const large=(a1-a0)>180?1:0;
+  return 'M'+p0[0].toFixed(2)+' '+p0[1].toFixed(2)+' A'+rOut+' '+rOut+' 0 '+large+' 1 '+p1[0].toFixed(2)+' '+p1[1].toFixed(2)+
+         ' L'+p2[0].toFixed(2)+' '+p2[1].toFixed(2)+' A'+rIn+' '+rIn+' 0 '+large+' 0 '+p3[0].toFixed(2)+' '+p3[1].toFixed(2)+' Z';
+}
+function wheelSVG(picks,lastSpin){
+  const S=N, cx=145, cy=145, rOut=136, rIn=94, step=360/S;
+  const cov=unionOf(picks||[]);
+  const centres=(picks||[]).map(p=>p.n);
+  let o='<svg class="wheelsvg" viewBox="0 0 290 290" role="img" aria-label="European wheel prediction">';
+  o+='<circle cx="'+cx+'" cy="'+cy+'" r="'+(rOut+8)+'" fill="#05090f" stroke="rgba(255,255,255,.10)"/>';
+  for(let i=0;i<S;i++){
+    const n=numAt(i);
+    const a0=i*step-step/2, a1=a0+step, mid=(a0+a1)/2;
+    const hit=cov.has(n), isC=centres.indexOf(n)>=0;
+    o+='<path d="'+segPath(cx,cy,rIn,rOut,a0,a1)+'" fill="'+numColor(n)+'" opacity="'+(hit?1:0.15)+'" stroke="#05090f" stroke-width="1.2"/>';
+    if(hit) o+='<path d="'+segPath(cx,cy,rOut+2,rOut+9,a0,a1)+'" fill="'+(isC?'#f5b301':'#1fc8a9')+'" opacity="'+(isC?1:0.8)+'"/>';
+    const L=polarXY(cx,cy,(rIn+rOut)/2,mid);
+    o+='<text x="'+L[0].toFixed(1)+'" y="'+L[1].toFixed(1)+'" font-size="'+(hit?11.5:9)+'" font-family="Orbitron,monospace" font-weight="'+(isC?800:700)+
+       '" text-anchor="middle" dominant-baseline="middle" fill="'+(hit?'#05090f':'rgba(233,228,216,.45)')+'">'+dsp(n)+'</text>';
+    if(isC){
+      const M=polarXY(cx,cy,rOut+21,mid);
+      o+='<circle cx="'+M[0].toFixed(1)+'" cy="'+M[1].toFixed(1)+'" r="11" fill="#f5b301" stroke="#05090f" stroke-width="1.5"/>';
+      o+='<text x="'+M[0].toFixed(1)+'" y="'+M[1].toFixed(1)+'" font-size="10" font-family="Orbitron,monospace" font-weight="800" text-anchor="middle" dominant-baseline="middle" fill="#05090f">'+dsp(n)+'</text>';
+    }
+    if(lastSpin!==undefined && lastSpin!==null && n===lastSpin){
+      const Sx=polarXY(cx,cy,rIn-13,mid);
+      o+='<circle cx="'+Sx[0].toFixed(1)+'" cy="'+Sx[1].toFixed(1)+'" r="11.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-dasharray="3 2"/>';
+      o+='<text x="'+Sx[0].toFixed(1)+'" y="'+Sx[1].toFixed(1)+'" font-size="9.5" font-family="Orbitron,monospace" font-weight="800" text-anchor="middle" dominant-baseline="middle" fill="#ffffff">'+dsp(n)+'</text>';
+    }
+  }
+  o+='<circle cx="'+cx+'" cy="'+cy+'" r="'+(rIn-3)+'" fill="#0a0f1c" stroke="rgba(255,255,255,.10)"/>';
+  o+='<text x="'+cx+'" y="'+(cy-10)+'" font-size="9.5" font-family="Orbitron,monospace" text-anchor="middle" fill="#1fc8a9" letter-spacing="1.6">EUROPEAN</text>';
+  o+='<text x="'+cx+'" y="'+(cy+9)+'" font-size="17" font-family="Orbitron,monospace" font-weight="800" text-anchor="middle" fill="#f5b301">'+cov.size+'</text>';
+  o+='<text x="'+cx+'" y="'+(cy+23)+'" font-size="8.5" font-family="Orbitron,monospace" text-anchor="middle" fill="#7d8aa0">POCKETS</text>';
+  o+='</svg>';
+  return o;
+}
+/* French roulette racetrack (tableau) exactly as laid out on the table:
+   left cap 5-10-23-8 · top row 24→35 · right cap 3-26-0 · bottom row 30→32 */
+function trackLayout(){
+  const w=[]; for(let i=0;i<N;i++) w.push(numAt(i));
+  const start=w.indexOf(24);
+  const seq=[]; for(let i=0;i<N;i++) seq.push(w[(start+i)%N]);
+  return { top:seq.slice(0,15), right:seq.slice(15,18), bottom:seq.slice(18,33).reverse(), left:seq.slice(33,37).reverse() };
+}
+function trackCell(x,y,w,h,n,cov,centres,lastSpin){
+  const hit=cov.has(n), isC=centres.indexOf(n)>=0, isLast=(lastSpin!==undefined&&lastSpin!==null&&n===lastSpin);
+  const bg=numColor(n);
+  const st=hit?'stroke="'+(isC?'#f5b301':'#1fc8a9')+'" stroke-width="'+(isC?2.5:1.6)+'"':'stroke="rgba(255,255,255,.10)" stroke-width="1"';
+  let s='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="3" fill="'+bg+'" opacity="'+(hit?1:0.16)+'" '+st+'/>';
+  if(isLast) s+='<rect x="'+(x-1.5)+'" y="'+(y-1.5)+'" width="'+(w+3)+'" height="'+(h+3)+'" rx="4" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="3 2"/>';
+  s+='<text x="'+(x+w/2)+'" y="'+(y+h/2+1)+'" font-size="11" font-weight="'+(hit?800:600)+'" text-anchor="middle" dominant-baseline="middle" fill="'+
+     (hit?'#05090f':'rgba(233,228,216,.40)')+'">'+dsp(n)+'</text>';
+  return s;
+}
+/* Draw the track as a real stadium LOOP: the numbers run around the perimeter
+   (top row left->right, down the right end, bottom row right->left, up the left end),
+   which is exactly how the French racetrack sits on the table. */
+function loopPoint(t,W,H,r){
+  const Lx=W-2*r, Ly=H-2*r, A=Math.PI*r/2;
+  const P=2*Lx+2*Ly+4*A;
+  t=((t%P)+P)%P;
+  const segs=[[Lx,0],[A,1],[Ly,2],[A,3],[Lx,4],[A,5],[Ly,6],[A,7]];
+  let acc=0, k=0, u=0;
+  for(const s of segs){ if(t<acc+s[0]){ k=s[1]; u=t-acc; break; } acc+=s[0]; }
+  const cxr=W-r, cyb=H-r;
+  if(k===0) return {x:r+u,          y:r};
+  if(k===1){ const a=-Math.PI/2+(u/A)*(Math.PI/2); return {x:cxr+r*Math.cos(a), y:r+r*Math.sin(a)}; }
+  if(k===2) return {x:W-r,          y:r+u};
+  if(k===3){ const a=0+(u/A)*(Math.PI/2);          return {x:cxr+r*Math.cos(a), y:cyb+r*Math.sin(a)}; }
+  if(k===4) return {x:cxr-u,        y:H-r};
+  if(k===5){ const a=Math.PI/2+(u/A)*(Math.PI/2);  return {x:r+r*Math.cos(a), y:cyb+r*Math.sin(a)}; }
+  if(k===6) return {x:r,            y:cyb-u};
+  const a=Math.PI+(u/A)*(Math.PI/2);               return {x:r+r*Math.cos(a), y:r+r*Math.sin(a)};
+}
+/* The track is laid out EXACTLY like the table:
+   15 cells along the top, 3 down the right end, 15 along the bottom (right->left),
+   4 up the left end — following the wheel, starting at 24. */
+function raceTrackSVG(picks,lastSpin){
+  const wheel=[]; for(let i=0;i<N;i++) wheel.push(numAt(i));
+  const s0=wheel.indexOf(24);
+  const seq=[]; for(let i=0;i<N;i++) seq.push(wheel[(s0+i)%N]);   // 37, wheel order from 24
+  const cov=unionOf(picks||[]);
+  const centres=(picks||[]).map(p=>p.n);
+
+  const W=1180, H=364, r=88, CW=63, CH=46;
+  const SPX=(W-2*r)/15, SPY=(H-2*r)/4;
+  const slots=[];
+  for(let i=0;i<15;i++) slots.push({x:r+(i+0.5)*SPX,               y:r});            // top row
+  for(let i=0;i<3;i++)  slots.push({x:W-r,                          y:r+(i+0.5)*((H-2*r)/3)});  // right end
+  for(let i=0;i<15;i++) slots.push({x:W-r-(i+0.5)*SPX,             y:H-r});        // bottom row
+  for(let i=0;i<4;i++)  slots.push({x:r,                            y:H-r-(i+0.5)*SPY});        // left end
+
+  let o='<svg class="tracksvg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="French racetrack prediction">';
+  o+='<rect x="1.5" y="1.5" width="'+(W-3)+'" height="'+(H-3)+'" rx="'+(r+6)+'" fill="#080d18" stroke="rgba(255,255,255,.10)" stroke-width="2"/>';
+  o+='<rect x="'+(r-14)+'" y="'+(r-14)+'" width="'+(W-2*r+28)+'" height="'+(H-2*r+28)+'" rx="14" fill="#05090f" stroke="rgba(31,200,169,.10)" stroke-width="1"/>';
+
+  seq.forEach((n,i)=>{
+    const s=slots[i]; if(!s) return;
+    const x=Math.round(s.x-CW/2), y=Math.round(s.y-CH/2);
+    const hit=cov.has(n), isC=centres.indexOf(n)>=0;
+    const isLast=(lastSpin!==undefined&&lastSpin!==null&&n===lastSpin);
+    o+='<rect x="'+x+'" y="'+y+'" width="'+CW+'" height="'+CH+'" rx="7" fill="'+numColor(n)+'" opacity="'+(hit?1:0.13)+
+       '" stroke="'+(hit?(isC?'#f5b301':'#1fc8a9'):'rgba(255,255,255,.08)')+'" stroke-width="'+(isC?3.5:(hit?2:1))+'"/>';
+    if(isLast) o+='<rect x="'+(x-4)+'" y="'+(y-4)+'" width="'+(CW+8)+'" height="'+(CH+8)+'" rx="9" fill="none" stroke="#fff" stroke-width="2.5" stroke-dasharray="6 4"/>';
+    o+='<text x="'+(x+CW/2)+'" y="'+(y+CH/2+1)+'" font-size="'+(hit?24:20)+'" font-weight="'+(hit?800:600)+
+       '" text-anchor="middle" dominant-baseline="middle" fill="'+(hit?'#05090f':'rgba(233,228,216,.32)')+'">'+dsp(n)+'</text>';
+  });
+
+  // sector captions inside the oval
+  const cap=(frac,txt,sub)=>'<text x="'+(r+frac*(W-2*r))+'" y="'+(H/2-6)+'" font-size="13" letter-spacing="3" text-anchor="middle" fill="#7d8aa0">'+txt+'</text>'+
+                            (sub?'<text x="'+(r+frac*(W-2*r))+'" y="'+(H/2+14)+'" font-size="10" letter-spacing="2" text-anchor="middle" fill="#3f4c5e">'+sub+'</text>':'');
+  o+=cap(0.10,'ZERO','12 35 3 26 0 32 15');
+  o+=cap(0.38,'VOISINS','22 18 29 7 28 12 35');
+  o+=cap(0.62,'ORPHELINS','17 34 6');
+  o+=cap(0.88,'TIER','27 13 36 11 30 8');
+  o+='</svg>';
+  return o;
+}
+let VIEW='track';
+function renderWheelChart(picks,lastSpin){
+  const box=document.getElementById('wheelChart');
+  if(box) box.innerHTML=(VIEW==='track')?raceTrackSVG(picks||[],lastSpin):wheelSVG(picks||[],lastSpin);
+  const leg=document.getElementById('wheelLegend'); if(!leg) return;
+  const cov=unionOf(picks||[]);
+  const centres=(picks||[]).map(p=>p.n);
+  const list=Array.from(cov).sort((a,b)=>POS[a]-POS[b]);
+  leg.innerHTML=
+    '<div class="wlg"><i style="background:#f5b301"></i><span><b>n9 centres</b> — '+(centres.length?centres.map(n=>dsp(n)).join(' &nbsp;·&nbsp; '):'—')+'</span></div>'+
+    '<div class="wlg"><i style="background:#1fc8a9"></i><span><b>covered pockets</b> — '+cov.size+'</span></div>'+
+    '<div class="wlg"><i style="background:#fff;border-radius:50%"></i><span><b>last spin</b> — '+(lastSpin!==undefined&&lastSpin!==null?dsp(lastSpin):'—')+'</span></div>'+
+    '<div class="wchiprow">'+list.map(n=>'<span class="wchip" style="background:'+numBg(n)+';color:'+numColor(n)+';border-color:'+(numColor(n))+'55">'+dsp(n)+'</span>').join('')+'</div>';
+}
+/* In-browser verification: recompute every W/L against the exact bet that was
+   placed, on the currently selected table and wheel, and report the result. */
+function selfTest(){
+  const id=state.selected, t=id?state.tables[id]:null;
+  let nums=(PRED.override&&PRED.override.length)?PRED.override.slice():(t?t.numbers.slice(0,PRED.depth):[]);
+  nums=nums.filter(n=>Number.isInteger(n)&&POS[n]!==undefined).slice(0,260);
+  if(nums.length<12) return {ok:false,msg:'need at least 12 spins'};
+  setWheel(PRED.wheel);
+  const depth=Math.min(Math.max(nums.length-3,4),PRED.depth,90);   // 90 is plenty for a stable backtest
+  const list=buildStrategies(nums,depth);
+  let checked=0,bad=0,badSize=0,badLbl=[],sizeSample='';
+  for(const s of list){
+    for(let k=0;k<s.wl.length;k++){
+      const cov=unionOf(s.wlBet[k]);
+      const real=cov.has(s.wlSpin[k])?'W':'L';
+      checked++; if(real!==s.wl[k]) bad++;
+      if(cov.size!==18){ badSize++; if(!sizeSample) sizeSample=s.k+' #'+k+' = '+cov.size; }
+    }
+    for(const q of s.picks){ const L=2*q.r+1; if(L!==9&&L!==7&&L!==5) badLbl.push(s.k+':n'+L); }
+  }
+  return {ok:bad===0&&badSize===0&&badLbl.length===0, checked:checked, bad:bad,
+          badSize:badSize, sizeSample:sizeSample, badLbl:badLbl,
+          strategies:list.length, wheel:PRED.wheel, spins:nums.length};
+}
+function runSelfTest(){
+  const el=document.getElementById('riskBanner');
+  let r;
+  try{ r=selfTest(); }catch(e){ if(el){el.className='risk-banner bad'; el.innerHTML='<b>SELF-TEST ERROR:</b> '+e.message;} return; }
+  if(!el) return;
+  if(r.msg){ el.className='risk-banner'; el.innerHTML='<b>SELF-TEST:</b> '+r.msg+'.'; return; }
+  if(r.ok){
+    el.className='risk-banner good';
+    el.innerHTML='<b>SELF-TEST PASSED ✅</b> — checked <b>'+r.checked+'</b> results across <b>'+r.strategies+
+      '</b> strategies ('+(r.wheel==='us'?'American 00':'European 0')+', '+r.spins+' spins). Every W/L matches the exact bet placed, every bet is exactly 18 pockets, and no n1/n3 labels exist.';
+  } else {
+    el.className='risk-banner bad';
+    el.innerHTML='<b>SELF-TEST FAILED ❌</b> — '+r.checked+' checked · wrong W/L: <b>'+r.bad+
+      '</b> · wrong size: <b>'+r.badSize+'</b>'+(r.sizeSample?' ('+r.sizeSample+')':'')+
+      ' · bad labels: <b>'+(r.badLbl.length?r.badLbl.slice(0,5).join(', '):'none')+'</b>';
+  }
+}
+let LAST_LIST=[];
+function renderWlVerify(best){ return renderWlVerifyRows(best); }
+
+/* W/L — ONE method only:
+   a spin WINS if the number is inside at least one of the n9 arcs.
+   e.g. bet 7n9 19n9 -> covered = 9,22,18,29,7,28,12,35,3 + 25,2,21,4,19,15,32,0,26
+        spin 12 -> 12 IS in the list -> WIN
+        spin 17 -> 17 is NOT in the list -> LOSS */
+function renderWlVerifyRows(best){
+  const el=document.getElementById('wlVerify'); if(!el) return;
+  const note=document.getElementById('wlVerifyNote');
+  const id=state.selected;
+  const out=[];
+
+  /* the bet currently on screen, waiting for the next spin */
+  if(best&&best.picks&&best.picks.length){
+    const u=unionOf(best.picks);
+    const list=Array.from(u).sort((a,b)=>POS[a]-POS[b]).map(dsp).join(', ');
+    out.push('<div class="prow" style="background:rgba(245,179,1,.08);border:1px solid rgba(245,179,1,.32)">'+
+      '<span><b style="color:var(--primary)">NEXT SPIN — waiting for the result</b><br>'+
+      'bet <b>'+pickList(best.picks)+'</b> · '+u.size+' pockets<br>'+
+      '<span style="font-size:.7rem;color:var(--muted)">covered: '+list+'</span></span>'+
+      '<b style="color:var(--primary)">?</b></div>');
+  }
+
+  const jr=journalRows(id,MAX_JOURNAL);
+  const btRows=[];
+  if(best && best.wl && best.wl.length){
+    for(let i=0;i<best.wl.length;i++){
+      btRows.push({spin:best.wlSpin[i], bet:best.wlBet[i]||[], win:best.wl[i]==='W', skipped:false, src:'bt'});
+    }
+  }
+  const scoredLive=jr.filter(r=>!r.skipped);
+  const combined=scoredLive.concat(btRows);
+  if(combined.length){
+    const totW=combined.filter(r=>r.win).length, totL=combined.length-totW;
+    const lw=scoredLive.filter(r=>r.win).length, ll=scoredLive.length-lw;
+    out.push('<div style="font-family:Orbitron,monospace;font-size:.6rem;letter-spacing:.14em;color:var(--green);margin:.6rem 0 .35rem">'+
+      'CONTINUOUS TABLE RECORD · '+totW+'W / '+totL+'L ('+Math.round(100*totW/combined.length)+'%) · '+
+      'LIVE SESSION: '+lw+'W / '+ll+'L</div>');
+    combined.slice(0,30).forEach((r,i)=>{
+      const u=unionOf(r.bet);
+      const list=Array.from(u).sort((a,b)=>POS[a]-POS[b]).map(dsp).join(', ');
+      const badge='<b style="color:'+(r.win?'var(--green)':'var(--red)')+'">'+(r.win?'W':'L')+'</b>';
+      const verdict=r.win?'<b style="color:var(--green)">'+dsp(r.spin)+' is INSIDE &rarr; WIN</b>'
+                         :'<b style="color:var(--red)">'+dsp(r.spin)+' is OUTSIDE &rarr; LOSS</b>';
+      out.push('<div class="prow'+(r.win?' best':'')+'"><span>'+
+        '#'+(i+1)+' spin <b style="color:'+numColor(r.spin)+'">'+dsp(r.spin)+'</b> · bet <b>'+pickList(r.bet)+'</b> · '+u.size+' pockets<br>'+
+        '<span style="font-size:.7rem;color:var(--muted)">covered: '+list+' &nbsp;·&nbsp; '+verdict+
+        '</span></span>'+badge+'</div>');
+    });
+  } else {
+    out.push('<div class="pfoot" style="margin-top:.5rem">No results yet. The bet shown in <b>NEXT SPIN</b> above is the one that will be scored the moment the next number lands — '+
+      'the row then shows the full covered list and whether the spin was inside it.</div>');
+  }
+  el.innerHTML=out.join('');
+  if(note) note.textContent='wheel: EUROPEAN (0) · feed: '+feedOrderOf(id);
+}
+function renderRiskBanner(list,best){
+  const el=document.getElementById('riskBanner'); if(!el) return;
+  const on=(list||[]).filter(Boolean);
+  if(!on.length || !best){ el.className='risk-banner'; el.innerHTML=''; return; }
+  const worst=Math.max.apply(null,on.map(s=>maxLossStreak(s.wl)));
+  const ls=lossStreak(best.wl);
+  const edge=best.cur-best.cov;
+  const conf=confidenceOf(best);
+  const hit=hitRate(lastN(best.wl,12));
+  let cls='risk-banner', msg='';
+  if(ls>=5){
+    cls+=' bad';
+    msg='<b>RISK GUARD — STOP ('+ls+' LOSSES IN A ROW):</b> mandatory cooldown. Wait ~10 spins and let the table reset before betting again. '+
+        'Longest cold run on this table: <b>'+worst+'</b>.';
+  } else if(ls>=4){
+    cls+=' bad';
+    msg='<b>RISK GUARD — COOLDOWN ('+ls+' LOSSES IN A ROW):</b> the top pick is cold — skip the next 2–3 spins or switch strategy. '+
+        'Longest cold run on this table: <b>'+worst+'</b>.'+(conf.why?' ('+conf.why+')':'');
+  } else if(conf.cls==='bad'){
+    cls+=' bad';
+    msg='<b>RISK GUARD — WEAK:</b> current run <b>'+ls+'L</b> · recent hit rate <b>'+Math.round(hit*100)+
+        '%</b> is below baseline. Reduce stake; do not chase.';
+  } else if(edge>0.05 && conf.cls==='good' && ls<=2){
+    cls+=' good';
+    msg='<b>RISK GUARD — HEALTHY:</b> current run <b>'+ls+'L</b> · edge <b>+'+(Math.round(edge*100))+'%</b> · recent hit rate <b>'+
+        Math.round(hit*100)+'%</b>. Longest cold run: <b>'+worst+'</b>.';
+  } else {
+    msg='<b>RISK GUARD — NEUTRAL:</b> current run <b>'+ls+'L</b> · recent hit rate <b>'+Math.round(hit*100)+'%</b> · edge <b>'+
+        ((edge>=0?'+':'')+Math.round(edge*100))+'%</b>. Longest cold run: <b>'+worst+
+        '</b>. Keep stakes flat — no system removes the house edge.';
+  }
+  el.className=cls; el.innerHTML=msg;
+}
+function buildPredictions(nums){
+  const depth=Math.min(Math.max(nums.length-3,4),PRED.depth,90);
+  const list=buildStrategies(nums,depth);
+  LAST_LIST=list;
+  try{ scoreStrategies(state.selected,nums,list); }catch(e){}
+  const best=list.filter(s=>s.star)[0]||list[0];
+  LASTPICK[state.selected]=best.picks;
+  if(state.selected){
+    const st=buildLobbyStatFromList(state.selected,nums,list);
+    LOBBY.stats[state.selected]={sig:nums.slice(0,20).join(',')+'|'+enabledKey()+'|'+PRED.opp+'|'+PRED.ruleSel,numSig:nums.slice(0,20).join(','),st:st};
+    updateGlobalWLHeader();
+  }
+  renderRiskBanner(list,best);
+  renderWheelChart(best.picks, nums[0]);
+  renderAccuracy(best, nums);
+  renderWlVerify(best);
+  document.getElementById('predTag').textContent=(PRED.wheel==='us'?'AMERICAN (00)':'EUROPEAN')+' · '+depth+' spins analysed'+
+    (nums.length<25?' · few spins = low confidence':'');
+  const tb=document.getElementById('topbet'), tm=document.getElementById('topbetMini');
+  const cov=unionOf(best.picks).size;
+  const covFrac=cov/N;
+  const BJ=journalStrip(state.selected,best.k);
+  const btW=best.cW!==undefined?best.cW:best.wl.filter(c=>c==='W').length;
+  const btL=(best.cT!==undefined?best.cT:best.wl.length)-btW;
+  const totW=btW+(BJ.n>0?BJ.w:0), totL=btL+(BJ.n>0?(BJ.n-BJ.w):0), totN=totW+totL;
+  const BWL=(BJ.n>0?BJ.wl:[]).concat(best.wl);
+  const BSPIN=(BJ.n>0?BJ.spin:[]).concat(best.wlSpin);
+  const BBET=(BJ.n>0?BJ.bet:[]).concat(best.wlBet);
+  const BRATE=totN>0?(totW/totN):best.cur;
+  const BEDGE=BRATE-covFrac;
+  if(tb) tb.innerHTML='<div class="tbet">'+best.picks.map((p,i)=>pickChip(p,i>1?'fill':'')).join('')+'<div>'+
+    '<div style="font-family:Orbitron;font-size:.56rem;letter-spacing:.2em;color:var(--muted)">TOP BET · '+best.k+(best.star?' ★':'')+
+    ' · TOTAL '+totW+'W/'+totL+'L'+(BJ.n>0?' (LIVE '+BJ.w+'W/'+(BJ.n-BJ.w)+'L)':'')+'</div>'+
+    '<div style="font-size:1.05rem;font-weight:700">'+pickList(best.picks)+'</div>'+
+    wlStrip(BWL,WL_SHOW,{spin:BSPIN,bet:BBET})+
+    '<div style="font-size:.8rem;color:var(--muted)">won <b style="color:'+hitCol(BRATE,covFrac)+'">'+pct(BRATE)+
+    '%</b> · edge <b style="color:'+edgeCol(BEDGE*100)+'">'+((BEDGE>=0?'+':'')+pct(BEDGE))+'%</b> · '+cov+' numbers covered</div></div></div>';
+  if(tm) tm.innerHTML='<div style="text-align:center">'+best.picks.map((p,i)=>pickChip(p,i>1?'fill':'')).join('')+
+    '<div style="font-size:1rem;font-weight:700;margin-top:.4rem">'+pickList(best.picks)+'</div>'+
+    wlStrip(BWL,WL_SHOW,{spin:BSPIN,bet:BBET})+
+    '<div style="font-size:.76rem;color:var(--muted);margin-top:.2rem">'+best.k+' · win <b style="color:'+hitCol(BRATE,covFrac)+'">'+pct(BRATE)+
+    '% ('+totW+'W/'+totL+'L)</b> · recent <b style="color:'+hitCol(best.next,covFrac)+'">'+pct(best.next)+'%</b>'+
+    '<br>'+cov+' pockets covered · win = ball lands in one of them</div></div>';
+  document.getElementById('predBody').innerHTML=list.map(stratCard).join('');
+}
+function renderPredictions(){
+  const body=document.getElementById('predBody'); if(!body) return;
+  const t=state.tables[state.selected];
+  let nums=[];
+  if(PRED.override&&PRED.override.length) nums=PRED.override.slice();
+  else if(t) nums=t.numbers.slice(0,PRED.depth);
+  nums=nums.filter(n=>Number.isInteger(n)&&POS[n]!==undefined).slice(0,260);
+  if(!PRED.override) journalUpdate(state.selected, nums);
+  const sig=nums.length+':'+nums.slice(0,40).join(',')+'|'+PRED.wheel+'|'+PRED.depth+'|'+PRED.ruleSel+'|'+PRED.opp;
+  if(sig===PRED.sig) return;
+  PRED.sig=sig;
+  if(nums.length<8){
+    body.innerHTML='<div class="pempty">Need at least 8 spins to build a prediction…</div>';
+    if(document.getElementById('wheelChart')) renderWheelChart([],null);
+    const tb=document.getElementById('topbet'), tm=document.getElementById('topbetMini');
+    if(tb) tb.innerHTML='';
+    if(tm) tm.innerHTML='<div class="lock-icon">🎯</div><div class="lock-text">Waiting for spins…</div>';
+    return;
+  }
+  try{ buildPredictions(nums); }catch(e){ console.error('prediction error',e); }
+}
+/* wheel is locked to European; wire opposite-mode, depth, and rule selectors */
+(function wireOppSel(){
+  const os=document.getElementById('oppSel');
+  if(!os) return;
+  os.value=PRED.opp;
+  os.onchange=e=>{
+    PRED.opp=e.target.value==='wheel'?'wheel':'board';
+    try{ localStorage.setItem('rp_opposite_mode',PRED.opp); }catch(err){}
+    PRED.sig=''; LOBBY.stats={};
+    renderPredictions(); renderLobby();
+  };
+})();
+document.getElementById('depthSel').onchange=e=>{PRED.depth=Number(e.target.value);PRED.sig='';renderPredictions();};
+document.getElementById('ruleSel').onchange=e=>{PRED.ruleSel=e.target.value;PRED.sig='';renderPredictions();};
+document.getElementById('manualBtn').onclick=()=>{const b=document.getElementById('manualBox');b.style.display=b.style.display==='none'?'block':'none';};
+document.getElementById('manualApply').onclick=()=>{
+  const raw=(document.getElementById('manualNums').value||'').replace(/00/g,'37').match(/\d+/g)||[];
+  const arr=raw.map(Number).filter(n=>n>=0&&n<=37).slice(0,260);
+  PRED.override=arr.length?arr:null; PRED.sig=''; renderPredictions();
+};
+document.getElementById('manualClear').onclick=()=>{PRED.override=null;PRED.sig='';renderPredictions();};
+/* ---------- socket ---------- */
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const errBox = document.getElementById('errBox');
+function setStatus(mode, txt){
+  statusDot.className = 'dot ' + mode;
+  statusText.textContent = txt;
+}
+function showErr(msg){ errBox.style.display='block'; errBox.textContent = msg; }
+
+function applyHistories(histories){
+  markData();
+  let changed = false;
+  for(const [tid, data] of Object.entries(histories||{})){
+    if(!data || !data.results) continue;
+    const nums = parseRouletteResults(data.results);
+    if(!isRouletteNumbers(nums)) continue; // skip baccarat/dice/etc
+    const t = ensureTable(tid);
+    t.provider = 'Evolution';
+    t.numbers = mergeSpins(t.numbers, normaliseFeed(tid, nums)).slice(0, 260);
+    t.updatedAt = Date.now();
+    bgEnqueue(tid);
+    const cfg = state.configs[tid];
+    if(cfg && cfg.title) t.name = cfg.title;
+    const stream = state.thumbs[tid];
+    if(stream) t.img = state.templateBase + stream + '_L.jpg';
+    changed = true;
+  }
+  if(changed){ scheduleRender(!!state.selected); }
+}
+function applyHistoryUpdated(args){
+  markData();
+  if(!args) return;
+  const key = Object.keys(args)[0];
+  if(!key) return;
+  const data = args[key];
+  if(!data || !data.results) return;
+  const nums = parseRouletteResults(data.results);
+  if(!isRouletteNumbers(nums)) return;
+  const t = ensureTable(key);
+  t.provider = 'Evolution';
+  t.numbers = mergeSpins(t.numbers, normaliseFeed(key, nums)).slice(0, 260); // index 0 = last spin, accumulates up to 260
+  t.updatedAt = Date.now();
+  bgEnqueue(key);
+  const cfg = state.configs[key];
+  if(cfg && cfg.title) t.name = cfg.title;
+  const stream = state.thumbs[key];
+  if(stream) t.img = state.templateBase + stream + '_L.jpg';
+  scheduleRender(state.selected===key);
+}
+
+let SOCK=null, LAST_DATA=0, WATCH=null, REQ_TIMER=null, FAILS=0, CONNECTING=false;
+function markData(){ LAST_DATA=Date.now(); FAILS=0; }
+/* Tear the socket down COMPLETELY and build a fresh one. Reusing a half-dead
+   socket is what used to leave the feed stuck. */
+function hardReconnect(reason){
+  FAILS++;
+  try{ if(SOCK){ if(SOCK.onAny) SOCK.offAny(); SOCK.removeAllListeners(); SOCK.disconnect(); SOCK=null; } }catch(e){ SOCK=null; }
+  const wait=Math.min(12000, 700*FAILS);
+  setStatus('conn','RE-SYNCING… ('+reason+')');
+  clearTimeout(hardReconnect._t);
+  hardReconnect._t=setTimeout(function(){ CONNECTING=false; try{ connect(); }catch(e){} }, wait);
+}
+let _qDetail=false,_lobbyT=0,_lobbyTimer=null;
+/* Detail view updates immediately (that's what you're watching).
+   The lobby grid is throttled to ~1.4 fps — rebuilding 100+ cards on every spin
+   was the source of the perceived lag. */
+function scheduleRender(withDetail){
+  if(withDetail && !_qDetail){
+    _qDetail=true;
+    requestAnimationFrame(function(){ _qDetail=false; try{ renderDetail(); }catch(e){} });
+  }
+  const now=Date.now(), wait=1500-(now-_lobbyT);
+  if(wait<=0){ _lobbyT=now; try{ renderLobby(); }catch(e){} }
+  else if(!_lobbyTimer){
+    _lobbyTimer=setTimeout(function(){ _lobbyTimer=null; _lobbyT=Date.now(); try{ renderLobby(); }catch(e){} }, wait);
+  }
+}
+function requestIndex(){ try{ if(SOCK&&SOCK.connected) SOCK.send(['requestDataIndex','']); }catch(e){} }
+function startWatchdog(){
+  if(WATCH) clearInterval(WATCH);
+  WATCH=setInterval(function(){
+    const fa=document.getElementById('feedAge');
+    const age=LAST_DATA?((Date.now()-LAST_DATA)/1000):0;
+    if(fa){
+      if(!LAST_DATA){ fa.textContent='waiting…'; fa.classList.remove('stale'); }
+      else { fa.textContent=Math.round(age)+'s ago'; fa.classList.toggle('stale', age>25); }
+    }
+    if(!SOCK || !SOCK.connected){                       // socket died -> rebuild it
+      if(!CONNECTING && !hardReconnect._t){ hardReconnect('offline'); }
+      return;
+    }
+    if(LAST_DATA && age>30){                            // quiet feed -> nudge, then rebuild
+      requestIndex();
+      if(age>50) hardReconnect('stalled');
+    }
+  },4000);
+}
+function forceReload(){ setStatus('conn','REFRESHING…'); FAILS=0; LAST_DATA=0; hardReconnect('manual'); }
+document.getElementById('refreshBtn').onclick=forceReload;
+
+/* Browsers throttle timers and can suspend the socket in a background tab —
+   these two handlers are what stop the feed from staying stuck after you
+   come back to the page. */
+try{
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden) return;
+    const age=LAST_DATA?((Date.now()-LAST_DATA)/1000):999;
+    if(!SOCK || !SOCK.connected || age>25){ FAILS=0; hardReconnect('visible'); }
+    else requestIndex();
+  });
+  window.addEventListener('online',function(){ FAILS=0; hardReconnect('online'); });
+  window.addEventListener('offline',function(){ setStatus('err','OFFLINE'); });
+}catch(e){}
+function restoreAllJournals(){
+  try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
+    if(k&&k.indexOf('rp_wl_')===0) loadJournals(k.slice(6)); } }catch(e){}
+}
+function connect(){
+  if(CONNECTING) return;
+  CONNECTING=true;
+  setStatus('conn','CONNECTING…');
+  try{ if(SOCK){ if(SOCK.onAny) SOCK.offAny(); SOCK.removeAllListeners(); SOCK.disconnect(); SOCK=null; } }catch(e){ SOCK=null; }
+  let socket;
+  try{
+    socket = io(BACKEND, {
+      transports: ['websocket','polling'],   // websocket first: immune to CORS
+      upgrade:true,
+      rememberUpgrade:true,
+      reconnection:true, reconnectionAttempts:Infinity,
+      reconnectionDelay:1000, reconnectionDelayMax:4000,
+      randomizationFactor:0.5,
+      timeout:8000, forceNew:true });
+    SOCK = socket;
+    CONNECTING=false;
+    // ANY traffic proves the feed is alive — this is the heartbeat that keeps it unstuck
+    if(socket.onAny) socket.onAny(function(){ markData(); });
+  }catch(e){ CONNECTING=false; setStatus('err','LOAD ERROR'); showErr('Socket.IO CDN failed to load. Check internet.'); loadDemo(); return; }
+  startWatchdog();
+
+  socket.on('connect', ()=>{
+    state.connected = true;
+    let tr=''; try{ tr=socket.io.engine.transport.name; }catch(e){}
+    setStatus('live','● LIVE'+(tr?' · '+tr.toUpperCase():''));
+    errBox.style.display='none';
+    loadingEl.textContent = 'LOADING TABLES…';
+    markData();
+    socket.send(['requestDataIndex','']); // same as roulette.tools official app
+    setTimeout(requestIndex,400);         // double-tap so a dropped first packet self-heals
+  });
+  socket.on('reconnect', ()=>{ markData(); requestIndex(); });
+  socket.on('heartbeat', markData);
+  socket.on('ping', markData);
+  socket.on('connect_error', (err)=>{
+    const msg=(err&&(err.message||err.type))||'unknown';
+    setStatus('err','RETRYING… '+msg);
+    const cors = /xhr|poll|network|cors/i.test(msg);
+    loadingEl.textContent = 'CONNECTION FAILED: '+msg+
+      (cors && !LOCAL ? '  — the API only accepts WebSocket from a local file. Check your internet and reload.' : '')+
+      (cors && LOCAL ? '' : '');
+    showErr('Socket error: '+msg+(LOCAL?' (local proxy mode)':' (direct mode)'));
+  });
+  socket.on('disconnect', ()=>{ setStatus('conn','RECONNECTING…'); });
+
+  socket.on('newConnections', d=>{ document.getElementById('onlineCount').textContent = Number(d).toLocaleString(); });
+  socket.on('predictionsMade', d=>{ document.getElementById('predCount').textContent = Number(d).toLocaleString(); });
+  setInterval(function(){
+    const el=document.getElementById('bgNote');
+    if(el) el.textContent = BG.done ? ('W/L engine · '+Object.keys(BG.sig).length+' tables tracked') : '';
+  },4000);
+  socket.on('dealerUpdate', d=>{
+    try{ const info = d[0], tid = d[1]; const t = ensureTable(tid); t.dealer = (info && info[0]) || ''; renderLobby(); if(state.selected===tid) renderDetail(); }catch(e){}
+  });
+  socket.on('pragmaticTablesUpdate', d=>{
+    try{
+      const nums = d[0], pid = Number(d[1]);
+      const id = 'pragmatic_' + pid;
+      const t = ensureTable(id);
+      t.provider = 'Pragmatic Play';
+      const clean = normaliseFeed(id, nums).filter(n=>Number.isInteger(n)&&n>=0&&n<=36);
+      t.numbers = mergeSpins(t.numbers, clean).slice(0,260);
+      t.updatedAt = Date.now();
+      bgEnqueue(id);
+      scheduleRender(state.selected===id);
+    }catch(e){}
+  });
+  socket.on('tablesDataPragmatic', d=>{
+    try{
+      const names = d[0], urls = d[1], numsMap = d[2], ids = d[3];
+      ids.forEach(pid=>{
+        const id = 'pragmatic_' + pid;
+        const t = ensureTable(id);
+        t.provider = 'Pragmatic Play';
+        if(names && names[pid]) t.name = names[pid];
+        if(urls && urls[pid] && urls[pid][0]) t.img = urls[pid][0];
+        if(numsMap && Array.isArray(numsMap[pid])){
+          const clean = normaliseFeed(id, numsMap[pid]).filter(n=>Number.isInteger(n)&&n>=0&&n<=36);
+          t.numbers = mergeSpins(t.numbers, clean).slice(0,260);
+        }
+        t.updatedAt = Date.now();
+        bgEnqueue(id);
+      });
+      scheduleRender(!!(state.selected && state.selected.startsWith('pragmatic_')));
+    }catch(e){}
+  });
+  socket.on('tablesData', d=>{
+    markData();
+    if(!d || !d.type) return;
+    if(d.type === 'lobby.configs'){
+      const cfgs = (d.args && d.args.configs) || {};
+      for(const [k,v] of Object.entries(cfgs)) state.configs[k] = v;
+      // pre-create roulette tables with names
+      for(const [k,v] of Object.entries(cfgs)){
+        if(v && v.gt === 'roulette'){
+          const t = ensureTable(k); t.name = v.title || t.name;
+        }
+      }
+      renderLobby();
+    } else if(d.type === 'lobby.thumbnails'){
+      const thumbs = (d.args && d.args.thumbnails) || {};
+      for(const [k,v] of Object.entries(thumbs)){ if(v && v.stream) state.thumbs[k] = v.stream; }
+      const tpl = d.args && d.args.templates && d.args.templates['16:9'] && d.args.templates['16:9'].L;
+      if(tpl && tpl.includes('/thumbnail/')) state.templateBase = tpl.split('%s')[0];
+      for(const [k,s] of Object.entries(state.thumbs)){
+        if(state.tables[k]) state.tables[k].img = state.templateBase + s + '_L.jpg';
+      }
+      renderLobby();
+    } else if(d.type === 'lobby.histories'){
+      loadingEl.style.display='none';
+      applyHistories(d.args && d.args.histories);
+    } else if(d.type === 'lobby.historyUpdated'){
+      loadingEl.style.display='none';
+      applyHistoryUpdated(d.args);
+    }
+  });
+
+  if(REQ_TIMER) clearInterval(REQ_TIMER);
+  REQ_TIMER=setInterval(()=>{
+    if(!SOCK || !SOCK.connected) return;  // the watchdog handles dead sockets
+    const age=LAST_DATA?((Date.now()-LAST_DATA)/1000):0;
+    if(age>25) requestIndex();            // only nudge a genuinely quiet feed
+  },20000);
+
+  // demo fallback if nothing arrives in 10s (still keep retrying live in background)
+  setTimeout(()=>{
+    if(Object.keys(state.tables).filter(k=>state.tables[k].numbers.length).length===0){
+      showErr('Still connecting… showing demo preview. Live numbers will replace these automatically once connected. '
+        + ' (WebSocket not connected yet — check your internet connection.)');
+      loadDemo(true);
+    }
+  }, 10000);
+}
+
+/* demo numbers matching screenshots, newest FIRST */
+function loadDemo(keepLive){
+  const demo = {
+    'Immersive Roulette':[10,14,12,25,33,12,2,21,13,36,3,8],
+    'Auto-Roulette':[24,8,19,11,35,20,6,36,13,16,35,24],
+    'Roulette':[29,17,30,20,2,14,19,20,9,17,5,16],
+    'Speed Roulette':[3,7,2,31,6,30,7,30,2,14,33,14],
+    'VIP Roulette':[23,16,17,19,3,10,28,19,30,30,19,17],
+    'Gold Vault Roulette':[10,32,13,2,28,16,31,18,0,14,0,35],
+    'XXXtreme Lightning Roulette':[2,3,22,15,27,22,21,16,8,1,10,13],
+    'Lightning Roulette':[1,15,35,14,11,2,22,11,32,5,13,16],
+  };
+  for(const [name, nums] of Object.entries(demo)){
+    const id = 'demo_' + name;
+    if(!state.tables[id] || !state.tables[id].numbers.length){
+      state.tables[id] = { name, img:'', numbers:nums, updatedAt:Date.now(), dealer:'' };
+    }
+  }
+  state.connected = state.connected || !keepLive;
+  renderLobby();
+}
+
+restoreAllJournals();
+connect();
+</script>
+</body>
+</html>

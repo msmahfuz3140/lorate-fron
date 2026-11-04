@@ -1,0 +1,29 @@
+========================================================================
+ROULETTE TOOL - HOW TO CHANGE / UPDATE THE TOOL FILE (সহজ নিয়ম)
+========================================================================
+
+ভবিষ্যতে যদি নতুন কোনো Tool ফাইল (HTML) বসাতে চান:
+
+১. এই ফোল্ডারটিতে আসুন:
+   sloot-frontend/public/roulette-tool/
+
+২. আগের `index.html` ফাইলটি মুছে ফেলুন (বা রিপ্লেস করুন)।
+
+৩. আপনার নতুন HTML ফাইলটি এখানে পেস্ট করুন। 
+   - আপনি চাইলে ফাইলের নাম `index.html` দিতে পারেন, 
+   - অথবা ফাইলের নিজস্ব নাম (যেমন: Roulette-Prediction-BUILD21.html) রাখলেও চলবে!
+   সিস্টেম স্বয়ংক্রিয়ভাবে এই ফোল্ডারের সর্বশেষ HTML ফাইলটি শনাক্ত করে লোড করবে।
+
+৪. কোনো সার্ভার রিস্টার্ট বা কোড এডিট করার দরকার নেই! 
+   ব্রাউজারে পেজ রিফ্রেশ (Refresh) করলেই তাৎক্ষণিকভাবে নতুন টুল চালু হয়ে যাবে। 
+   (ক্যাশিং সমস্যা দূর করার জন্য নো-ক্যাশ অটো রিলোডার সেট করা হয়েছে)।
+
+========================================================================
+ENGLISH INSTRUCTIONS:
+To update or change the tool in the future:
+1. Open this folder: `sloot-frontend/public/roulette-tool/`
+2. Delete the old `index.html` (or overwrite it).
+3. Paste your new HTML tool file here (named `index.html` or any `.html` build name).
+4. Refresh your browser page (/dashboard/tool) — the new tool loads instantly!
+========================================================================
+

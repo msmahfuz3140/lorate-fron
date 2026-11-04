@@ -1,26 +1,164 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --bg-primary: #06080d;
+  --bg-card: rgba(14, 18, 27, 0.85);
+  --bg-card-hover: rgba(22, 28, 41, 0.95);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-gold: rgba(245, 158, 11, 0.35);
+  --border-teal: rgba(16, 185, 129, 0.35);
+  --border-red: rgba(239, 68, 68, 0.35);
+  --accent-gold: #f59e0b;
+  --accent-teal: #10b981;
+  --accent-red: #ef4444;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  font-family: 'Rajdhani', 'Inter', -apple-system, sans-serif;
+  overflow-x: hidden;
+  selection-background-color: #f59e0b;
+  selection-color: #000;
+}
+
+.font-display {
+  font-family: 'Orbitron', monospace;
+}
+
+.font-body {
+  font-family: 'Rajdhani', sans-serif;
+}
+
+/* ==========================================================================
+   DASHBOARDS & SIDEBARS DEDICATED HIGH-LEGIBILITY TYPOGRAPHY (Inter & Plus Jakarta Sans)
+   Applied exclusively to user, admin, and moderator dashboards & sidebars for effortless reading
+   ========================================================================== */
+.dashboard-root,
+.dashboard-root aside,
+.dashboard-sidebar,
+aside {
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+
+.dashboard-root .font-display,
+.dashboard-root aside .font-display,
+.dashboard-sidebar .font-display,
+aside .font-display {
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  letter-spacing: -0.01em !important;
+}
+
+.dashboard-root .font-body,
+.dashboard-root aside .font-body,
+.dashboard-sidebar .font-body,
+aside .font-body {
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+
+.dashboard-root aside button,
+.dashboard-root aside a,
+.dashboard-root aside span:not(.font-mono),
+.dashboard-root aside p,
+aside button,
+aside a,
+aside span:not(.font-mono),
+aside p {
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  letter-spacing: normal !important;
+}
+
+.dashboard-root h1,
+.dashboard-root h2,
+.dashboard-root h3,
+.dashboard-root h4,
+.dashboard-root h5,
+.dashboard-root h6 {
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif !important;
+  letter-spacing: -0.02em !important;
+}
+
+.dashboard-root p,
+.dashboard-root span:not(.font-mono),
+.dashboard-root a:not(.font-mono),
+.dashboard-root label,
+.dashboard-root input,
+.dashboard-root select,
+.dashboard-root textarea,
+.dashboard-root table,
+.dashboard-root th,
+.dashboard-root td,
+.dashboard-root button:not(.font-mono) {
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+
+.dashboard-root .font-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;
+}
+
+/* Subtle background grid */
+.bg-cyber-grid {
+  background-image:
+    linear-gradient(rgba(16, 185, 129, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: linear-gradient(135deg, rgba(15, 20, 31, 0.85), rgba(9, 12, 19, 0.75));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+}
+
+.glass-panel-elevated {
+  background: linear-gradient(135deg, rgba(18, 24, 38, 0.92), rgba(11, 15, 24, 0.85));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.8);
+}
+
+/* Gold shimmer animation */
+@keyframes goldShimmer {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.text-gold-shimmer {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24, #ef4444, #f59e0b);
+  background-size: 300% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: goldShimmer 6s ease infinite;
+}
+
+/* Pulse animation for live indicators */
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.9); }
+}
+
+.animate-live-pulse {
+  animation: livePulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #06080d;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(245, 158, 11, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 158, 11, 0.45);
 }
