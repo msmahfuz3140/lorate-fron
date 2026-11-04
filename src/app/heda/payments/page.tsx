@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { authClient } from '../../../lib/auth-client';
+import { authClient, API_BASE } from '../../../lib/auth-client';
 import { useDebounce } from '../../../hooks/useDebounce';
 import {
   CreditCard,
@@ -127,7 +127,7 @@ export default function AdminPaymentsPage() {
     const token = typeof window !== 'undefined'
       ? (localStorage.getItem('sloot_token') || localStorage.getItem('auth_token'))
       : null;
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050/api/v1';
+    const backendUrl = API_BASE;
     const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
     window.open(`${backendUrl}/payments/admin/export?format=csv${tokenParam}`, '_blank');
   };

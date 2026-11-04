@@ -11,7 +11,7 @@ import {
 } from '../shared/auth';
 import { SubscriptionPlan } from '../shared/plans';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050/api/v1';
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://lorate-back.vercel.app/api/v1';
 
 export function getStoredToken(): string | null {
   if (typeof window === 'undefined') return null;

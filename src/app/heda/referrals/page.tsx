@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { authClient } from '../../../lib/auth-client';
+import { authClient, API_BASE } from '../../../lib/auth-client';
 import {
   Users2,
   Share2,
@@ -277,7 +277,7 @@ export default function AdminReferralsPage() {
     const token = typeof window !== 'undefined'
       ? (localStorage.getItem('sloot_token') || localStorage.getItem('auth_token'))
       : null;
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050/api/v1';
+    const backendUrl = API_BASE;
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
     window.open(`${backendUrl}/admin/referrals/export${tokenParam}`, '_blank');
   };
