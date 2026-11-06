@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navbar } from '../../components/Navbar';
 import { Footer } from '../../components/Footer';
 import { authClient } from '../../lib/auth-client';
@@ -25,6 +25,25 @@ export default function ContactPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [telegramUrl, setTelegramUrl] = useState('https://t.me/roulettetools_support');
+
+  useEffect(() => {
+    let mounted = true;
+    authClient.getPublicWebsiteSettings()
+      .then((settings) => {
+        if (mounted && settings?.supportContact?.telegram) {
+          let tg = settings.supportContact.telegram.trim();
+          if (!tg.startsWith('http')) {
+            tg = tg.startsWith('@') ? `https://t.me/${tg.slice(1)}` : `https://t.me/${tg}`;
+          }
+          setTelegramUrl(tg);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,6 +208,28 @@ export default function ContactPage() {
 
               {/* Support Info Sidebar */}
               <div className="space-y-6">
+                <div className="rounded-2xl border border-teal-500/40 bg-teal-950/30 p-6 backdrop-blur-xl">
+                  <div className="flex items-center gap-2 text-teal-400 font-display text-xs font-bold uppercase tracking-wider mb-3">
+                    <Send className="h-4 w-4" />
+                    Telegram Support Desk
+                  </div>
+                  <h3 className="font-display text-lg font-bold text-white mb-2">
+                    Official Telegram Support
+                  </h3>
+                  <p className="text-xs text-slate-300 leading-relaxed mb-4">
+                    Need instant tool unlock, subscription activation, or direct assistance? Chat directly with our official support representative on Telegram.
+                  </p>
+                  <a
+                    href={telegramUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 px-4 py-2.5 font-display text-xs font-black uppercase tracking-wider text-black shadow-lg shadow-teal-500/20 hover:brightness-110 active:scale-95 transition-all"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    Chat on Telegram
+                  </a>
+                </div>
+
                 <div className="rounded-2xl border border-white/10 bg-[#0c1017]/80 p-6 backdrop-blur-xl">
                   <div className="flex items-center gap-2 text-amber-400 font-display text-xs font-bold uppercase tracking-wider mb-3">
                     <Clock className="h-4 w-4" />

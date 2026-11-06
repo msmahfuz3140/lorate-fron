@@ -129,6 +129,7 @@ const NAV_SECTIONS: NavSection[] = [
         icon: Terminal,
         subItems: [
           { name: 'Live Tool Operations', href: '/heda/tool' },
+          { name: 'Edit Support Info', href: '/heda/settings?tab=support', badge: 'TG' },
           { name: 'Website CMS Settings', href: '/heda/settings' },
           { name: 'Announcement Campaigns', href: '/heda/notifications' }
         ]
@@ -156,6 +157,7 @@ const NAV_SECTIONS: NavSection[] = [
         name: 'Support & Reports',
         icon: LifeBuoy,
         subItems: [
+          { name: 'Edit Support Info', href: '/heda/settings?tab=support', badge: 'TELEGRAM' },
           { name: 'Support Tickets', href: '/heda/tickets' },
           { name: 'Financial Reports & CSV', href: '/heda/reports' }
         ]

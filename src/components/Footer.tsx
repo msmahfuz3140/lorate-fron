@@ -5,6 +5,27 @@ import Link from 'next/link';
 import { Activity, ShieldCheck, Send, Lock, Zap, ArrowUpRight } from 'lucide-react';
 
 export function Footer() {
+  const [telegramUrl, setTelegramUrl] = React.useState('https://t.me/roulettetools_support');
+
+  React.useEffect(() => {
+    let mounted = true;
+    import('../lib/auth-client').then(({ authClient }) => {
+      authClient.getPublicWebsiteSettings()
+        .then((settings) => {
+          if (mounted && settings?.supportContact?.telegram) {
+            let tg = settings.supportContact.telegram.trim();
+            if (!tg.startsWith('http')) {
+              tg = tg.startsWith('@') ? `https://t.me/${tg.slice(1)}` : `https://t.me/${tg}`;
+            }
+            setTelegramUrl(tg);
+          }
+        })
+        .catch(() => {});
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
   return (
     <footer className="relative border-t border-amber-500/10 bg-[#040609] pt-16 pb-12 overflow-hidden">
       {/* Top Gold Shimmer Accent Line */}
@@ -110,7 +131,7 @@ export function Footer() {
             </p>
             <div className="space-y-3">
               <a
-                href="https://t.me/shadowroulette"
+                href={telegramUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex w-full items-center justify-between rounded-xl border border-teal-500/30 bg-teal-500/10 px-4 py-2.5 font-display text-xs font-bold text-teal-300 transition-all hover:bg-teal-500/20 hover:border-teal-400 hover:text-white"

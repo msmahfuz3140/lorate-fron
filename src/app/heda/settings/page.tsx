@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { authClient } from '../../../lib/auth-client';
 import { SubscriptionPlan } from '../../../shared/plans';
 import {
@@ -29,11 +30,21 @@ import {
   Trash2,
   Send,
   Lock,
-  ArrowUpDown
+  ArrowUpDown,
+  ExternalLink,
+  LifeBuoy
 } from 'lucide-react';
 
 export default function AdminSettingsPage() {
-  const [activeTab, setActiveTab] = useState<'tool' | 'plans' | 'website' | 'announcements'>('tool');
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'tool' | 'plans' | 'website' | 'announcements' | 'support'>('tool');
+
+  useEffect(() => {
+    const tabParam = searchParams?.get('tab');
+    if (tabParam === 'support' || tabParam === 'plans' || tabParam === 'website' || tabParam === 'announcements' || tabParam === 'tool') {
+      setActiveTab(tabParam as any);
+    }
+  }, [searchParams]);
   const [loading, setLoading] = useState(true);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -187,6 +198,46 @@ export default function AdminSettingsPage() {
     }
   };
 
+  // Handlers for Dedicated Support & Telegram Info
+  const [savingSupport, setSavingSupport] = useState(false);
+  const handleSaveSupportInfo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!websiteSettings) return;
+    setSavingSupport(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+    try {
+      let formattedTg = (websiteSettings.supportContact?.telegram || '').trim();
+      if (formattedTg && !formattedTg.startsWith('http://') && !formattedTg.startsWith('https://')) {
+        if (formattedTg.startsWith('@')) {
+          formattedTg = `https://t.me/${formattedTg.slice(1)}`;
+        } else {
+          formattedTg = `https://t.me/${formattedTg}`;
+        }
+      }
+
+      const updatedPayload = {
+        ...websiteSettings,
+        supportContact: {
+          ...websiteSettings.supportContact,
+          telegram: formattedTg
+        },
+        socialLinks: {
+          ...websiteSettings.socialLinks,
+          telegram: formattedTg
+        }
+      };
+
+      const updated = await authClient.updateAdminWebsiteSettings(updatedPayload, 'Admin updated Telegram support channel info');
+      setWebsiteSettings(updated);
+      setSaveSuccess('Support Telegram and contact info updated successfully! Users will now see this link everywhere across the site.');
+    } catch (err: any) {
+      setSaveError(err?.message || 'Failed to update support info.');
+    } finally {
+      setSavingSupport(false);
+    }
+  };
+
   // Handlers for Broadcast Announcement
   const handleSendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -299,6 +350,18 @@ export default function AdminSettingsPage() {
         >
           <Terminal className="h-4 w-4" />
           Tool Management
+        </button>
+
+        <button
+          onClick={() => setActiveTab('support')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-display text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+            activeTab === 'support'
+              ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Send className="h-4 w-4 text-teal-400" />
+          Edit Support Info (Telegram)
         </button>
 
         <button
@@ -1237,6 +1300,160 @@ export default function AdminSettingsPage() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: EDIT SUPPORT INFO & TELEGRAM */}
+          {activeTab === 'support' && websiteSettings && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Send className="h-5 w-5 text-teal-400" />
+                    <h2 className="font-display text-lg font-bold uppercase tracking-wider text-white">
+                      Support Info &amp; Telegram Channel Management
+                    </h2>
+                  </div>
+                  <p className="font-body text-xs text-slate-400 mt-1 max-w-2xl">
+                    Set the official Telegram support link and contact destinations. This link is dynamically displayed to users on locked prediction tool screens, the contact desk, user dashboard, and footer.
+                  </p>
+                </div>
+
+                <a
+                  href={
+                    websiteSettings.supportContact?.telegram?.startsWith('http')
+                      ? websiteSettings.supportContact?.telegram
+                      : `https://t.me/${(websiteSettings.supportContact?.telegram || '').replace('@', '')}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-teal-500/40 bg-teal-500/10 text-teal-300 hover:bg-teal-500/20 text-xs font-display font-bold uppercase tracking-wider transition-all shadow-sm"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Test Telegram Link
+                </a>
+              </div>
+
+              <form onSubmit={handleSaveSupportInfo} className="space-y-6">
+                <div className="rounded-2xl border border-white/10 bg-[#070c16]/80 p-6 backdrop-blur-xl space-y-6">
+                  {/* Telegram Field */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="font-display text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                        <Send className="h-4 w-4 text-teal-400" />
+                        Support Telegram Link / Username
+                        <span className="text-teal-400 text-[10px] font-mono">(Direct Link for Users)</span>
+                      </label>
+                      <span className="text-[10px] text-slate-500 font-mono">e.g. https://t.me/your_support or @your_support</span>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={websiteSettings.supportContact?.telegram || ''}
+                        onChange={(e) =>
+                          setWebsiteSettings({
+                            ...websiteSettings,
+                            supportContact: { ...websiteSettings.supportContact, telegram: e.target.value }
+                          })
+                        }
+                        placeholder="https://t.me/roulettetools_support"
+                        className="w-full rounded-xl border border-teal-500/30 bg-black/60 p-3.5 font-mono text-sm text-teal-300 placeholder-slate-600 focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400 transition-colors"
+                        required
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-slate-400">
+                      Users clicking &quot;Contact Support on Telegram&quot; anywhere on the platform (such as locked prediction tools or support prompts) will immediately open this link.
+                    </p>
+                  </div>
+
+                  {/* Support Email */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-white/5">
+                    <div>
+                      <label className="font-display text-xs font-bold uppercase tracking-wider text-slate-300 block mb-2">
+                        Official Support Email
+                      </label>
+                      <input
+                        type="email"
+                        value={websiteSettings.supportContact?.email || ''}
+                        onChange={(e) =>
+                          setWebsiteSettings({
+                            ...websiteSettings,
+                            supportContact: { ...websiteSettings.supportContact, email: e.target.value }
+                          })
+                        }
+                        placeholder="support@roulettecomputer.com"
+                        className="w-full rounded-xl border border-white/10 bg-black/40 p-3 font-mono text-xs text-white focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-display text-xs font-bold uppercase tracking-wider text-slate-300 block mb-2">
+                        Support Discord Community (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={websiteSettings.supportContact?.discord || ''}
+                        onChange={(e) =>
+                          setWebsiteSettings({
+                            ...websiteSettings,
+                            supportContact: { ...websiteSettings.supportContact, discord: e.target.value }
+                          })
+                        }
+                        placeholder="https://discord.gg/roulettetools"
+                        className="w-full rounded-xl border border-white/10 bg-black/40 p-3 font-mono text-xs text-white focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-4 border-t border-white/5">
+                    <button
+                      type="submit"
+                      disabled={savingSupport}
+                      className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 px-7 py-3.5 font-display text-xs font-black uppercase tracking-wider text-black shadow-lg shadow-teal-500/20 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      <Save className="h-4 w-4" />
+                      {savingSupport ? 'Saving Support Settings...' : 'Save & Publish Support Info'}
+                    </button>
+                  </div>
+                </div>
+              </form>
+
+              {/* Live Preview Card */}
+              <div className="rounded-2xl border border-teal-500/30 bg-teal-950/20 p-6 backdrop-blur-xl">
+                <h3 className="font-display text-xs font-bold uppercase tracking-wider text-teal-300 mb-3 flex items-center gap-2">
+                  <Eye className="h-4 w-4" />
+                  Live Preview: What Users See
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-white/10 bg-[#0c1017] p-4">
+                    <span className="text-[10px] font-display uppercase tracking-widest text-slate-400 block mb-2">
+                      Locked Tool Screen Button:
+                    </span>
+                    <a
+                      href={websiteSettings.supportContact?.telegram || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-teal-500/50 bg-teal-500/15 py-3 px-4 font-display text-xs font-bold uppercase text-teal-300"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      Contact Support on Telegram
+                    </a>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-[#0c1017] p-4">
+                    <span className="text-[10px] font-display uppercase tracking-widest text-slate-400 block mb-2">
+                      Target URL destination:
+                    </span>
+                    <p className="font-mono text-xs text-teal-400 truncate">
+                      {websiteSettings.supportContact?.telegram || 'Not set'}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Support Email: {websiteSettings.supportContact?.email || 'Not set'}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           )}

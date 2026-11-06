@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         isLoading,
-        isAuthenticated: !!user && (user.isEmailVerified || user.isPhoneVerified),
+        isAuthenticated: !!user && (user.isEmailVerified || user.isPhoneVerified || user.isActive !== false),
         login,
         register,
         verifyOtp,

@@ -4,18 +4,14 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
-import { Mail, Phone, Lock, Eye, EyeOff, User, ArrowRight, ShieldCheck, Activity, AlertCircle, Gift, Globe } from 'lucide-react';
-import { COUNTRY_CODES, formatToE164 } from '../../data/countries';
+import { Mail, Lock, Eye, EyeOff, User, ArrowRight, ShieldCheck, AlertCircle, Gift, Sparkles } from 'lucide-react';
 
 export default function RegisterPage() {
   const router = useRouter();
   const { register } = useAuth();
 
-  const [method, setMethod] = useState<'email' | 'phone'>('email');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [countryDialCode, setCountryDialCode] = useState('+880');
-  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [referralCode, setReferralCode] = useState('');
@@ -27,8 +23,13 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long');
+    if (!email.trim() || !email.includes('@')) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long');
       return;
     }
 
@@ -37,29 +38,18 @@ export default function RegisterPage() {
       return;
     }
 
-    let resolvedPhone: string | undefined = undefined;
-    if (method === 'phone') {
-      resolvedPhone = formatToE164(countryDialCode, phone);
-      if (!resolvedPhone || resolvedPhone.length < 8) {
-        setError('Please enter a valid phone number with your country code');
-        return;
-      }
-    }
-
     setLoading(true);
 
     try {
-      const res = await register({
+      await register({
         name: name.trim() || 'Member',
-        email: method === 'email' ? email.trim() : undefined,
-        phone: resolvedPhone,
+        email: email.trim().toLowerCase(),
         password,
         referralCode: referralCode.trim() || undefined
       });
 
-      const target = res.verificationTarget || (method === 'email' ? email.trim() : resolvedPhone!);
-      const devParam = res.devOtp ? `&devCode=${encodeURIComponent(res.devOtp)}` : '';
-      router.push(`/verify-otp?target=${encodeURIComponent(target)}&purpose=REGISTRATION${devParam}`);
+      // Immediate redirect to dashboard/tool - no OTP or verification step needed!
+      router.push('/dashboard/tool');
     } catch (err: any) {
       setError(err?.message || 'Registration failed. Please check your information and try again.');
     } finally {
@@ -96,7 +86,7 @@ export default function RegisterPage() {
           Create Member Account
         </h1>
         <p className="mt-1 text-sm text-slate-400">
-          Register with email or phone to access the prediction platform
+          Enter your email and password to instantly create your account
         </p>
       </div>
 
@@ -108,34 +98,6 @@ export default function RegisterPage() {
             <span>{error}</span>
           </div>
         )}
-
-        {/* Method selector tabs */}
-        <div className="mb-6 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-white/5 p-1">
-          <button
-            type="button"
-            onClick={() => { setMethod('email'); setError(null); }}
-            className={`flex items-center justify-center gap-2 rounded-lg py-2 font-display text-xs font-bold uppercase tracking-wider transition-all ${
-              method === 'email'
-                ? 'bg-amber-500 text-black shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Mail className="h-3.5 w-3.5" />
-            Email Verification
-          </button>
-          <button
-            type="button"
-            onClick={() => { setMethod('phone'); setError(null); }}
-            className={`flex items-center justify-center gap-2 rounded-lg py-2 font-display text-xs font-bold uppercase tracking-wider transition-all ${
-              method === 'phone'
-                ? 'bg-amber-500 text-black shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Phone className="h-3.5 w-3.5" />
-            SMS Verification
-          </button>
-        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -155,69 +117,26 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          {method === 'email' ? (
-            <div>
-              <label className="block font-display text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
-                  className="w-full rounded-lg border border-white/10 bg-black/40 pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-600 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors"
-                  required={method === 'email'}
-                />
-              </div>
+          <div>
+            <label className="block font-display text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+              Email Address
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@example.com"
+                className="w-full rounded-lg border border-white/10 bg-black/40 pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-600 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors"
+                required
+              />
             </div>
-          ) : (
-            <div>
-              <label className="block font-display text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                Country & Phone Number
-              </label>
-              <div className="flex gap-2">
-                {/* Country Code Dropdown */}
-                <div className="relative w-[130px] shrink-0">
-                  <select
-                    value={countryDialCode}
-                    onChange={(e) => setCountryDialCode(e.target.value)}
-                    className="w-full appearance-none rounded-lg border border-white/10 bg-[#121824] px-2.5 py-2.5 text-xs text-white focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors cursor-pointer"
-                  >
-                    {COUNTRY_CODES.map((c) => (
-                      <option key={`${c.code}-${c.dialCode}`} value={c.dialCode} className="bg-[#0c1017] text-white">
-                        {c.flag} {c.dialCode} ({c.name})
-                      </option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">
-                    ▼
-                  </div>
-                </div>
-
-                {/* Local Phone Number Input */}
-                <div className="relative flex-1">
-                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="1712345678"
-                    className="w-full rounded-lg border border-white/10 bg-black/40 pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-600 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors"
-                    required={method === 'phone'}
-                  />
-                </div>
-              </div>
-              <p className="mt-1 text-[11px] text-slate-500">
-                International: <span className="text-amber-400/90 font-mono font-medium">{formatToE164(countryDialCode, phone) || `${countryDialCode}...`}</span>
-              </p>
-            </div>
-          )}
+          </div>
 
           <div>
             <label className="block font-display text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-              Password <span className="text-[10px] text-slate-500 font-normal">(min 8 characters)</span>
+              Password <span className="text-[10px] text-slate-500 font-normal">(min 6 characters)</span>
             </label>
             <div className="relative">
               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
@@ -281,7 +200,8 @@ export default function RegisterPage() {
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" />
             ) : (
               <>
-                Register & Send One-Time Code
+                <Sparkles className="h-4 w-4 fill-black" />
+                Create Account &amp; Access Platform
                 <ArrowRight className="h-4 w-4" />
               </>
             )}
@@ -299,7 +219,7 @@ export default function RegisterPage() {
 
         <div className="mt-4 flex items-center justify-center gap-2 text-[11px] text-slate-500">
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-          <span>One-time cryptographic OTP verification required</span>
+          <span>Instant activation • Direct access to intelligence platform</span>
         </div>
       </div>
     </div>

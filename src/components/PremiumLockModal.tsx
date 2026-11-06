@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Lock, Sparkles, Check, ArrowRight, X, ShieldAlert } from 'lucide-react';
+import { Lock, Sparkles, ArrowRight, X, ShieldAlert, Send } from 'lucide-react';
 import { PLANS_ARRAY } from '../shared/plans';
+import { authClient } from '../lib/auth-client';
 
 interface PremiumLockModalProps {
   isOpen: boolean;
@@ -11,6 +12,26 @@ interface PremiumLockModalProps {
 }
 
 export function PremiumLockModal({ isOpen, onClose }: PremiumLockModalProps) {
+  const [telegramUrl, setTelegramUrl] = useState('https://t.me/roulettetools_support');
+
+  useEffect(() => {
+    let mounted = true;
+    authClient.getPublicWebsiteSettings()
+      .then((settings) => {
+        if (mounted && settings?.supportContact?.telegram) {
+          let tg = settings.supportContact.telegram.trim();
+          if (!tg.startsWith('http')) {
+            tg = tg.startsWith('@') ? `https://t.me/${tg.slice(1)}` : `https://t.me/${tg}`;
+          }
+          setTelegramUrl(tg);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   if (!isOpen) return null;
 
   return (
@@ -80,7 +101,7 @@ export function PremiumLockModal({ isOpen, onClose }: PremiumLockModalProps) {
           ))}
         </div>
 
-        {/* Action Button */}
+        {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-3">
           <Link
             href="/plans"
@@ -88,9 +109,18 @@ export function PremiumLockModal({ isOpen, onClose }: PremiumLockModalProps) {
             className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 py-3 font-display text-xs font-bold uppercase tracking-wider text-black shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:brightness-110 transition-all"
           >
             <Sparkles className="h-4 w-4" />
-            View All 5 Premium Plans
+            View All Plans
             <ArrowRight className="h-4 w-4" />
           </Link>
+          <a
+            href={telegramUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-teal-500/40 bg-teal-500/15 py-3 font-display text-xs font-bold uppercase tracking-wider text-teal-300 hover:bg-teal-500/25 transition-all"
+          >
+            <Send className="h-4 w-4 text-teal-400" />
+            Contact Telegram Support
+          </a>
           <button
             onClick={onClose}
             className="rounded-xl border border-white/10 bg-slate-900/60 px-5 py-3 font-display text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-white hover:bg-slate-800"

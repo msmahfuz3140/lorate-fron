@@ -2,13 +2,11 @@ import { z } from 'zod';
 import { UserRole } from './roles';
 
 export const RegisterSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters long').default('Member'),
-  email: z.string().email('Invalid email address format').optional().or(z.literal('')),
-  phone: z.string().min(8, 'Phone number must be at least 8 digits').optional().or(z.literal('')),
-  password: z.string().min(8, 'Password must be at least 8 characters long'),
+  name: z.string().min(2, 'Name must be at least 2 characters long').default('Member').optional(),
+  email: z.string().email('Invalid email address format'),
+  phone: z.string().optional(),
+  password: z.string().min(6, 'Password must be at least 6 characters long'),
   referralCode: z.string().optional()
-}).refine(data => (data.email && data.email.trim() !== '') || (data.phone && data.phone.trim() !== ''), {
-  message: 'Either a valid email address or phone number is required'
 });
 
 export type RegisterInput = z.infer<typeof RegisterSchema>;

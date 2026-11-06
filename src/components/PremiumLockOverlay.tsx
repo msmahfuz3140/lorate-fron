@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
@@ -12,7 +12,8 @@ import {
   ArrowLeft,
   CheckCircle2,
   AlertTriangle,
-  Zap
+  Zap,
+  Send
 } from 'lucide-react';
 import { PLANS_ARRAY } from '../shared/plans';
 import { AccessStatusResponse } from '../shared/subscriptions';
@@ -38,6 +39,25 @@ export function PremiumLockOverlay({
   const [unlockLoading, setUnlockLoading] = useState(false);
   const [unlockError, setUnlockError] = useState('');
   const [unlockSuccess, setUnlockSuccess] = useState('');
+  const [telegramUrl, setTelegramUrl] = useState('https://t.me/roulettetools_support');
+
+  useEffect(() => {
+    let mounted = true;
+    authClient.getPublicWebsiteSettings()
+      .then((settings) => {
+        if (mounted && settings?.supportContact?.telegram) {
+          let tg = settings.supportContact.telegram.trim();
+          if (!tg.startsWith('http')) {
+            tg = tg.startsWith('@') ? `https://t.me/${tg.slice(1)}` : `https://t.me/${tg}`;
+          }
+          setTelegramUrl(tg);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleUnlockSecretCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -327,6 +347,32 @@ export function PremiumLockOverlay({
             <ArrowLeft className="h-3.5 w-3.5" />
             Dashboard
           </Link>
+        </div>
+
+        {/* Dynamic Telegram Support Contact Banner */}
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl bg-teal-950/40 border border-teal-500/30 p-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center shrink-0">
+              <Send className="h-5 w-5 text-teal-400" />
+            </div>
+            <div className="text-left">
+              <p className="font-display text-xs font-bold uppercase tracking-wider text-white">
+                Need Access or Custom Support?
+              </p>
+              <p className="font-body text-[11px] text-slate-400">
+                Contact our support desk on Telegram to activate access or get assistance.
+              </p>
+            </div>
+          </div>
+          <a
+            href={telegramUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 px-5 py-2.5 font-display text-xs font-black uppercase tracking-wider text-black shadow-lg shadow-teal-500/20 hover:brightness-110 active:scale-95 transition-all shrink-0"
+          >
+            <Send className="h-3.5 w-3.5" />
+            Contact Telegram Support
+          </a>
         </div>
 
         {/* Strict Security Notice */}
