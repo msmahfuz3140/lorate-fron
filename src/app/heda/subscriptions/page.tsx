@@ -41,6 +41,7 @@ interface SubscriptionRecord {
   startDate: string;
   endDate: string;
   daysRemaining?: number;
+  isRevoked?: boolean;
   isManualGrant: boolean;
   grantReason?: string;
   extensionReason?: string;
@@ -137,7 +138,7 @@ export default function AdminSubscriptionsPage() {
 
   // Modals & Action State
   const [selectedSub, setSelectedSub] = useState<SubscriptionRecord | null>(null);
-  const [modalType, setModalType] = useState<'GRANT' | 'EXTEND' | 'REVOKE' | 'EDIT_PLAN' | 'CREATE_PLAN' | 'DELETE_PLAN' | null>(null);
+  const [modalType, setModalType] = useState<'GRANT' | 'EXTEND' | 'REVOKE' | 'UNBAN' | 'EDIT_PLAN' | 'CREATE_PLAN' | 'DELETE_PLAN' | null>(null);
   const [grantEmail, setGrantEmail] = useState('');
   const [grantPlanId, setGrantPlanId] = useState('15_days');
   const [extValue, setExtValue] = useState(30);
@@ -312,6 +313,27 @@ export default function AdminSubscriptionsPage() {
       fetchSubscriptions();
     } catch (err: any) {
       setActionError(err.message || 'Revocation failed');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUnban = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSub) return;
+    setIsSubmitting(true);
+    setActionError('');
+    try {
+      await authClient.unbanAdminSubscription({
+        subscriptionId: selectedSub._id,
+        reason: reasonInput.trim() || 'Admin lifted ban and restored tool access',
+        extensionDays: extValue || 15
+      });
+      setActionSuccess(`Subscription unbanned and tool access restored for ${selectedSub.userId?.email || 'customer'}.`);
+      closeModal();
+      fetchSubscriptions();
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to unban subscription');
     } finally {
       setIsSubmitting(false);
     }
@@ -536,9 +558,9 @@ export default function AdminSubscriptionsPage() {
             {[
               { id: 'ALL', label: 'All Passes' },
               { id: 'ACTIVE', label: '⭐ Active Passes' },
+              { id: 'REVOKED', label: '🚫 Ban Subscriptions' },
               { id: 'EXPIRED', label: '⌛ Expired Passes' },
-              { id: 'CLAIM_PENDING', label: '🔐 Awaiting Tool Unlock' },
-              { id: 'REVOKED', label: '🚫 Revoked Passes' }
+              { id: 'CLAIM_PENDING', label: '🔐 Awaiting Tool Unlock' }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -806,6 +828,22 @@ export default function AdminSubscriptionsPage() {
                                     <ShieldAlert className="h-4 w-4" />
                                   </button>
                                 </>
+                              )}
+
+                              {(s.isRevoked || s.status === 'REVOKED') && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedSub(s);
+                                    setExtValue(15);
+                                    setReasonInput('Lift ban and restore tool access');
+                                    setModalType('UNBAN');
+                                  }}
+                                  className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-400 hover:bg-emerald-500/20"
+                                  title="Lift Ban / Restore Tool Access"
+                                >
+                                  <ShieldCheck className="h-3.5 w-3.5" />
+                                  <span>Lift Ban</span>
+                                </button>
                               )}
                             </div>
                           </td>
@@ -1269,6 +1307,86 @@ export default function AdminSubscriptionsPage() {
                 className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold uppercase text-white hover:bg-rose-500 disabled:opacity-50"
               >
                 {isSubmitting ? 'Revoking...' : 'Confirm Revocation'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* 3B. UNBAN MODAL */}
+      {modalType === 'UNBAN' && selectedSub && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <form
+            onSubmit={handleUnban}
+            className="w-full max-w-md rounded-2xl border border-emerald-900/50 bg-[#070b14] p-6 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-emerald-900/30 pb-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-emerald-400" />
+                <h3 className="font-display text-base font-bold uppercase tracking-wider text-emerald-400">
+                  Lift Ban & Restore Access
+                </h3>
+              </div>
+              <button type="button" onClick={closeModal} className="text-slate-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              User: <span className="font-semibold text-white">{selectedSub.userId?.email}</span>
+            </p>
+
+            {selectedSub.revocationReason && (
+              <div className="rounded-xl border border-rose-900/40 bg-rose-950/20 p-3 text-xs text-rose-300">
+                <span className="font-semibold text-rose-400 block mb-1">Previous Ban Reason:</span>
+                {selectedSub.revocationReason}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold uppercase text-slate-300 mb-1">
+                Extension / Granted Days from Now
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                value={extValue}
+                onChange={(e) => setExtValue(parseInt(e.target.value) || 15)}
+                className="w-full rounded-xl border border-slate-800 bg-slate-900/80 px-3.5 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none"
+              />
+              <p className="mt-1 text-[11px] text-slate-500">
+                If the subscription was expired or near expiry, this ensures the user gets valid active days.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase text-slate-300 mb-1">
+                Audit / Unban Reason
+              </label>
+              <textarea
+                value={reasonInput}
+                onChange={(e) => setReasonInput(e.target.value)}
+                rows={2}
+                placeholder="Reason for lifting ban and restoring tool access..."
+                className="w-full rounded-xl border border-slate-800 bg-slate-900/80 px-3.5 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold uppercase text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {isSubmitting ? 'Restoring...' : 'Confirm Lift Ban'}
               </button>
             </div>
           </form>

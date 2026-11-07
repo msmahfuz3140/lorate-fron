@@ -32,7 +32,10 @@ import {
   UserPlus,
   Lock,
   EyeOff,
-  Sparkles
+  Sparkles,
+  Save,
+  Copy,
+  Check
 } from 'lucide-react';
 import { SUBSCRIPTION_PLANS } from '../../../shared/plans';
 
@@ -42,6 +45,7 @@ interface UserItem {
   name: string;
   email: string;
   phone?: string;
+  plainPassword?: string;
   role: string;
   accountStatus: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED' | 'DELETED';
   isEmailVerified: boolean;
@@ -124,6 +128,13 @@ export default function AdminUsersPage() {
   const [extUnit, setExtUnit] = useState<'days' | 'months' | 'years'>('days');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // User Password view/edit states
+  const [editPassword, setEditPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [copiedPassword, setCopiedPassword] = useState(false);
+  const [tableShowPassword, setTableShowPassword] = useState<Record<string, boolean>>({});
+
   // Staff creation states
   const [staffRole, setStaffRole] = useState<'SUPER_ADMIN' | 'MODERATOR'>('SUPER_ADMIN');
   const [staffName, setStaffName] = useState('');
@@ -183,12 +194,18 @@ export default function AdminUsersPage() {
 
   const openViewModal = async (u: UserItem) => {
     setSelectedUser(u);
+    setEditPassword(u.plainPassword || '');
+    setShowPassword(false);
+    setCopiedPassword(false);
     setActiveModal('VIEW');
     setIsDetailLoading(true);
     try {
       const targetId = (u.id || u._id)!;
       const res = await authClient.getAdminUserDetails(targetId);
       setDetailedUser(res);
+      if (res?.user?.plainPassword) {
+        setEditPassword(res.user.plainPassword);
+      }
     } catch (err: any) {
       setActionError(err.message || 'Failed to load full user details');
     } finally {
@@ -201,6 +218,8 @@ export default function AdminUsersPage() {
     setEditName(u.name || '');
     setEditPhone(u.phone || '');
     setEditRole(u.role || 'USER');
+    setEditPassword(u.plainPassword || '');
+    setShowPassword(false);
     setEditCommissionRate(u.moderatorCommissionRate ?? 10);
     setEditIsEmailVerified(!!u.isEmailVerified);
     setEditIsPhoneVerified(!!u.isPhoneVerified);
@@ -339,6 +358,7 @@ export default function AdminUsersPage() {
       await authClient.updateAdminUserProfile(targetId, {
         name: editName.trim(),
         phone: editPhone.trim() || undefined,
+        password: editPassword.trim() || undefined,
         role: editRole,
         moderatorCommissionRate: editRole === 'MODERATOR' ? Number(editCommissionRate) : undefined,
         isEmailVerified: editIsEmailVerified,
@@ -354,6 +374,91 @@ export default function AdminUsersPage() {
       setActionError(err.message || 'Failed to update user profile');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSavePasswordOnly = async () => {
+    if (!selectedUser) return;
+    if (!editPassword.trim()) {
+      setActionError('Password cannot be empty.');
+      return;
+    }
+    setSavingPassword(true);
+    setActionError('');
+    try {
+      const targetId = (selectedUser.id || selectedUser._id)!;
+      await authClient.updateAdminUserProfile(targetId, {
+        password: editPassword.trim(),
+        reason: 'Admin updated user password from profile view'
+      });
+      setActionSuccess(`Password updated and saved to MongoDB for ${selectedUser.email}!`);
+      if (detailedUser?.user) {
+        setDetailedUser({
+          ...detailedUser,
+          user: { ...detailedUser.user, plainPassword: editPassword.trim() }
+        });
+      }
+      setUsers((prev) =>
+        prev.map((usr) =>
+          (usr.id === targetId || usr._id === targetId) ? { ...usr, plainPassword: editPassword.trim() } : usr
+        )
+      );
+      authClient.clearCache();
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to update user password');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const generateRandomUserPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+    let pwd = '';
+    for (let i = 0; i < 12; i++) {
+      pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setEditPassword(pwd);
+    setShowPassword(true);
+  };
+
+  const handleCopyPassword = (pwd: string) => {
+    if (!pwd) return;
+    navigator.clipboard.writeText(pwd);
+    setCopiedPassword(true);
+    setTimeout(() => setCopiedPassword(false), 2000);
+  };
+
+  const handleBanToolAccess = async (u: UserItem) => {
+    const reason = window.prompt(`Enter reason for banning tool access for ${u.email}:`, 'Administrative tool ban / Fair usage policy review');
+    if (!reason) return;
+    setIsLoading(true);
+    setActionError('');
+    try {
+      const targetId = (u.id || u._id)!;
+      await authClient.banAdminUserToolAccess({ userId: targetId, reason });
+      setActionSuccess(`Tool access banned for ${u.email}. It is now listed under "Ban Subscriptions" option.`);
+      authClient.clearCache();
+      await fetchUsers(true);
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to ban user tool access');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUnbanToolAccess = async (u: UserItem) => {
+    setIsLoading(true);
+    setActionError('');
+    try {
+      const targetId = (u.id || u._id)!;
+      await authClient.unbanAdminUserToolAccess({ userId: targetId, reason: 'Admin restored tool access and lifted ban' });
+      setActionSuccess(`Tool access unbanned and restored for ${u.email}!`);
+      authClient.clearCache();
+      await fetchUsers(true);
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to unban user tool access');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -886,14 +991,20 @@ export default function AdminUsersPage() {
                       }`}
                     >
                       {/* User Info */}
-                      <td className="px-4 py-4">
+                      <td
+                        className="px-4 py-4 cursor-pointer group"
+                        onClick={() => openViewModal(u)}
+                        title="Click to view full user profile & credentials"
+                      >
                         <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-200 font-black text-xs">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-200 font-black text-xs group-hover:border-amber-500/50 group-hover:bg-amber-500/10 transition-colors">
                             {u.name?.charAt(0).toUpperCase() || 'U'}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-semibold text-white">{u.name}</span>
+                              <span className="font-semibold text-white group-hover:text-amber-400 transition-colors underline-offset-2 group-hover:underline">
+                                {u.name}
+                              </span>
                               <span
                                 className={`rounded px-1.5 py-0.2 text-[9px] font-bold uppercase ${
                                   u.role === 'SUPER_ADMIN'
@@ -906,8 +1017,11 @@ export default function AdminUsersPage() {
                                 {u.role === 'SUPER_ADMIN' ? 'OWNER ADMIN' : u.role}
                               </span>
                             </div>
-                            <div className="text-[11px] font-mono text-slate-500">
-                              ID: {u.id.substring(0, 10)}...
+                            <div className="text-[11px] font-mono text-slate-500 flex items-center gap-2">
+                              <span>ID: {u.id.substring(0, 10)}...</span>
+                              <span className="text-[10px] text-amber-400/80 opacity-0 group-hover:opacity-100 transition-opacity">
+                                🔍 View profile
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -926,6 +1040,28 @@ export default function AdminUsersPage() {
                               <span title="Email Unverified">
                                 <Clock className="h-3.5 w-3.5 text-amber-400" />
                               </span>
+                            )}
+                          </div>
+                          {/* User Password quick preview */}
+                          <div className="flex items-center gap-1.5 text-[11px] font-mono">
+                            <span className="text-slate-500 text-[10px] uppercase font-sans">Pass:</span>
+                            {u.plainPassword ? (
+                              <div className="flex items-center gap-1 text-amber-400/90 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                <span>{tableShowPassword[u.id] ? u.plainPassword : '••••••••'}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setTableShowPassword((prev) => ({ ...prev, [u.id]: !prev[u.id] }));
+                                  }}
+                                  className="text-slate-400 hover:text-white ml-0.5"
+                                  title={tableShowPassword[u.id] ? 'Hide' : 'Reveal password'}
+                                >
+                                  {tableShowPassword[u.id] ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-slate-600 text-[10px] italic">Not set (legacy)</span>
                             )}
                           </div>
                           {u.phone && (
@@ -1065,21 +1201,33 @@ export default function AdminUsersPage() {
                                 <Sliders className="h-4 w-4" />
                               </button>
                               <button
-                                onClick={() => openRevokeSubModal(u)}
+                                onClick={() => handleBanToolAccess(u)}
                                 className="rounded-lg p-1.5 text-rose-400 hover:bg-rose-500/10"
-                                title="Revoke Subscription Access"
+                                title="Ban Tool Access (Moves to Ban Subscriptions)"
                               >
                                 <ShieldAlert className="h-4 w-4" />
                               </button>
                             </>
                           ) : (
-                            <button
-                              onClick={() => openGrantSubModal(u)}
-                              className="rounded-lg p-1.5 text-emerald-400 hover:bg-emerald-500/10"
-                              title="Grant Manual Premium Access"
-                            >
-                              <PlusCircle className="h-4 w-4" />
-                            </button>
+                            <>
+                              {u.activeSubscription?.status === 'REVOKED' ? (
+                                <button
+                                  onClick={() => handleUnbanToolAccess(u)}
+                                  className="rounded-lg p-1.5 text-emerald-400 hover:bg-emerald-500/10"
+                                  title="Lift Ban / Restore Tool Access"
+                                >
+                                  <ShieldCheck className="h-4 w-4" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => openGrantSubModal(u)}
+                                  className="rounded-lg p-1.5 text-emerald-400 hover:bg-emerald-500/10"
+                                  title="Grant Manual Premium Access"
+                                >
+                                  <PlusCircle className="h-4 w-4" />
+                                </button>
+                              )}
+                            </>
                           )}
 
                           {isBlocked || isSuspended ? (
@@ -1183,6 +1331,93 @@ export default function AdminUsersPage() {
               </div>
             ) : detailedUser ? (
               <div className="space-y-6">
+                {/* 🔐 Password & Credentials Card */}
+                <div className="rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-950/20 via-slate-900/60 to-slate-900/40 p-4 sm:p-5 shadow-lg">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-500/20 pb-3 mb-4">
+                    <div className="flex items-center gap-2">
+                      <Lock className="h-4 w-4 text-amber-400" />
+                      <h4 className="font-display text-sm font-bold uppercase tracking-wider text-amber-300">
+                        Account Password & Direct Database Editing
+                      </h4>
+                    </div>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      Changes synchronize directly to MongoDB
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                      User Registration Password (Plain Text & Hashed)
+                    </label>
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={editPassword}
+                          onChange={(e) => setEditPassword(e.target.value)}
+                          placeholder="No plain password on legacy account (Enter new password)"
+                          className="w-full rounded-xl border border-slate-700 bg-slate-950/90 pl-3.5 pr-20 py-2.5 text-sm font-mono text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
+                        />
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-slate-800"
+                            title={showPassword ? 'Hide Password' : 'Show Password'}
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4 text-amber-400" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                          {editPassword && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyPassword(editPassword)}
+                              className="rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-slate-800"
+                              title="Copy Password"
+                            >
+                              {copiedPassword ? (
+                                <Check className="h-4 w-4 text-emerald-400" />
+                              ) : (
+                                <Copy className="h-4 w-4" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={generateRandomUserPassword}
+                        className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 hover:text-white"
+                        title="Generate Random Secure Password"
+                      >
+                        <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                        <span>Generate</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSavePasswordOnly}
+                        disabled={savingPassword || !editPassword.trim()}
+                        className="flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-black shadow-md disabled:opacity-50 transition-all"
+                      >
+                        {savingPassword ? (
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Save className="h-3.5 w-3.5" />
+                        )}
+                        <span>{savingPassword ? 'Saving...' : 'Save Password'}</span>
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-slate-400 flex items-center gap-1">
+                      <span>💡</span>
+                      <span>
+                        Editing and saving here updates both the readable password and the encrypted bcrypt hash in MongoDB, allowing immediate login with the new password.
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
                 {/* Profile Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
@@ -1407,6 +1642,43 @@ export default function AdminUsersPage() {
                   className="w-full rounded-xl border border-slate-800 bg-slate-900/80 px-3.5 py-2 text-sm text-white focus:border-amber-500 focus:outline-none"
                 />
               </div>
+            </div>
+
+            {/* Password Field */}
+            <div>
+              <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                Account Password (Visible & Editable)
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                  placeholder="Enter new password to change in DB"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-900/80 pl-3.5 pr-20 py-2 text-sm font-mono text-white focus:border-amber-500 focus:outline-none"
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="rounded-lg p-1.5 text-slate-400 hover:text-white"
+                    title={showPassword ? 'Hide' : 'Show'}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4 text-amber-400" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={generateRandomUserPassword}
+                    className="rounded-lg p-1.5 text-slate-400 hover:text-white"
+                    title="Generate Random"
+                  >
+                    <Sparkles className="h-4 w-4 text-amber-400" />
+                  </button>
+                </div>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Updating this saves both the readable password and the encrypted bcrypt hash to MongoDB.
+              </p>
             </div>
 
             {/* Role & Permission Assignment */}

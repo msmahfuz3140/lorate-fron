@@ -415,6 +415,27 @@ export const authClient = {
     });
   },
 
+  async unbanAdminSubscription(data: { subscriptionId: string; reason?: string; extensionDays?: number }): Promise<any> {
+    return request<any>('/subscriptions/admin/unban', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async banAdminUserToolAccess(data: { userId: string; reason?: string }): Promise<any> {
+    return request<any>('/subscriptions/admin/ban-tool', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async unbanAdminUserToolAccess(data: { userId: string; reason?: string }): Promise<any> {
+    return request<any>('/subscriptions/admin/unban-tool', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
   async getAdminOrders(params?: Record<string, any>): Promise<any> {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return request<any>(`/payments/admin/orders${qs}`);

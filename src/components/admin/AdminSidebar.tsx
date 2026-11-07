@@ -95,6 +95,7 @@ const NAV_SECTIONS: NavSection[] = [
         subItems: [
           { name: 'All Subscriptions', href: '/heda/subscriptions' },
           { name: 'Active Passes', href: '/heda/subscriptions?status=ACTIVE' },
+          { name: 'Ban Subscriptions', href: '/heda/subscriptions?status=REVOKED', badge: 'BANNED' },
           { name: 'Expired Passes', href: '/heda/subscriptions?status=EXPIRED' },
           { name: 'Manage Plan Catalog', href: '/heda/subscriptions?tab=PLANS' }
         ]
