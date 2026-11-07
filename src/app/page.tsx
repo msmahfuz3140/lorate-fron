@@ -2,7 +2,6 @@ import { Navbar } from '../components/Navbar';
 import { LiveTicker } from '../components/LiveTicker';
 import { Hero } from '../components/Hero';
 import { StatsBar } from '../components/StatsBar';
-import { StrategiesShowcase } from '../components/StrategiesShowcase';
 import { LiveLobbyPreview } from '../components/LiveLobbyPreview';
 import { PlansSection } from '../components/PlansSection';
 import { HowItWorks } from '../components/HowItWorks';
@@ -23,9 +22,6 @@ export default function HomePage() {
 
       {/* Telemetry Statistics Bar */}
       <StatsBar />
-
-      {/* The 3 Core Algorithmic Strategies */}
-      <StrategiesShowcase />
 
       {/* Multi-Table Live Surveillance Lobby */}
       <LiveLobbyPreview />

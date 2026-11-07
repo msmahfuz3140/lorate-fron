@@ -20,7 +20,6 @@ import {
   HelpCircle,
   Headphones,
   Zap,
-  Target,
   LayoutDashboard,
   Bell
 } from 'lucide-react';
@@ -126,7 +125,6 @@ export function Navbar() {
 
   const navLinks = [
     { label: 'Live Tables', href: '/#lobby', icon: Activity },
-    { label: 'Strategies', href: '/#strategies', icon: Target },
     { label: 'VIP Plans', href: '/plans', icon: Crown },
     { label: 'How It Works', href: '/how-it-works', icon: Zap },
     { label: 'FAQ', href: '/faq', icon: HelpCircle },
