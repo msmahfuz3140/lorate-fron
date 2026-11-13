@@ -17,7 +17,7 @@
   window.__ROULETTE_OVERLAY_LOADED__ = true;
 
   const HOST = 'https://roulettecomputer.com';
-  const TOOL_URL = HOST + '/api/roulette-tool';
+  const TOOL_URL = HOST + '/api/roulette-tool?overlay=1';
   const LOGO_URL = HOST + '/logo.png';
 
   // Container wrapper
@@ -226,10 +226,14 @@
       flex: 1;
       width: 100%;
       height: 100%;
+      min-height: 0;
       background: #05080f;
       position: relative;
+      overflow: hidden;
     }
     #tool-frame {
+      position: absolute;
+      inset: 0;
       width: 100%;
       height: 100%;
       border: none;

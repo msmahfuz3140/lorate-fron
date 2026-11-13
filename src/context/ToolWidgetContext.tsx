@@ -242,7 +242,7 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
     const left = Math.max(0, window.screen.availWidth - width - 20);
     const top = 50;
     const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no,location=no`;
-    window.open('/api/roulette-tool', 'RouletteFloatingPredictor', features);
+    window.open('/api/roulette-tool?overlay=1', 'RouletteFloatingPredictor', features);
   }, []);
 
   return (

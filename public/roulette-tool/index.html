@@ -291,6 +291,159 @@ a{color:inherit;text-decoration:none}
 .stale-badge{position:absolute;top:.7rem;left:.7rem;z-index:4;font-family:'Orbitron',monospace;font-size:.5rem;
   letter-spacing:.1em;color:#ff9aa4;background:rgba(0,0,0,.6);border:1px solid rgba(255,77,94,.4);
   padding:.2rem .45rem;border-radius:999px}
+
+/* ========================================================================== */
+/* COMPACT OVERLAY & MOBILE RESPONSIVE ADAPTATIONS                            */
+/* Ensures the roulette tool fits 100% inside small PiP windows & betting     */
+/* overlay popups without black cutoffs or awkward overflow                   */
+/* ========================================================================== */
+@media (max-width: 680px), (max-height: 720px) {
+  body { font-size: 14px; }
+  .topbar-inner {
+    padding: .4rem .6rem !important;
+    gap: .4rem !important;
+  }
+  .logo {
+    font-size: .8rem !important;
+    gap: .4rem !important;
+  }
+  .logo-mark {
+    width: 24px !important;
+    height: 24px !important;
+    font-size: 13px !important;
+  }
+  .status-pill {
+    padding: .25rem .5rem !important;
+    font-size: .52rem !important;
+    gap: .35rem !important;
+  }
+  .fbtn, .min-btn {
+    padding: .25rem .55rem !important;
+    font-size: .65rem !important;
+  }
+  .feed-age {
+    font-size: .5rem !important;
+  }
+  .hstats {
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-top: .15rem !important;
+    display: flex !important;
+    gap: .3rem !important;
+    overflow-x: auto !important;
+    padding-bottom: 2px !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  .hstats::-webkit-scrollbar { display: none !important; }
+  .hstat {
+    font-size: .5rem !important;
+    padding: .2rem .4rem !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+  .wrap {
+    padding: .5rem .6rem 2rem !important;
+  }
+  .divider {
+    margin: .5rem 0 .7rem !important;
+    font-size: .56rem !important;
+  }
+  .controls {
+    margin-bottom: .5rem !important;
+    gap: .35rem !important;
+  }
+  .search {
+    max-width: 100% !important;
+    padding: .45rem .65rem !important;
+    font-size: .85rem !important;
+  }
+  .provbar {
+    gap: .3rem !important;
+    margin-bottom: .5rem !important;
+  }
+  .pchip {
+    padding: .32rem .65rem !important;
+    font-size: .54rem !important;
+  }
+  .controls.fbar {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: .3rem !important;
+  }
+  .fsel {
+    min-width: 0 !important;
+    width: 100% !important;
+    padding: .32rem .4rem !important;
+    font-size: .75rem !important;
+  }
+  #tables {
+    grid-template-columns: 1fr !important;
+    gap: .65rem !important;
+  }
+  .tcard {
+    min-height: 170px !important;
+  }
+  .tcontent {
+    padding: .55rem .65rem .55rem !important;
+  }
+  .tname {
+    font-size: .95rem !important;
+    margin-bottom: .3rem !important;
+  }
+  .nums-box {
+    padding: .35rem .45rem !important;
+    min-height: 42px !important;
+    gap: .15rem .35rem !important;
+  }
+  .nums-box span {
+    font-size: .7rem !important;
+    padding: .06rem .15rem !important;
+  }
+  .card-best {
+    font-size: .5rem !important;
+    margin-bottom: .3rem !important;
+  }
+  .dgrid {
+    grid-template-columns: 1fr !important;
+    gap: .65rem !important;
+  }
+  .dcard {
+    min-height: 200px !important;
+  }
+  #chartPanel {
+    padding: .7rem .8rem !important;
+  }
+  #wheelChart {
+    transform-origin: top center;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+  }
+  .pctl {
+    gap: .3rem !important;
+  }
+  .pctl select, .pctl button {
+    font-size: .75rem !important;
+    padding: .25rem .4rem !important;
+  }
+}
+
+/* Specific class applied when loaded with ?overlay=1 or inside iframe */
+html.compact-overlay .topbar-inner { padding: .4rem .6rem !important; gap: .4rem !important; }
+html.compact-overlay .logo { font-size: .8rem !important; gap: .4rem !important; }
+html.compact-overlay .logo-mark { width: 24px !important; height: 24px !important; font-size: 13px !important; }
+html.compact-overlay .status-pill { padding: .25rem .5rem !important; font-size: .52rem !important; }
+html.compact-overlay .fbtn, html.compact-overlay .min-btn { padding: .25rem .55rem !important; font-size: .65rem !important; }
+html.compact-overlay .hstats {
+  width: 100% !important; margin-left: 0 !important; display: flex !important;
+  gap: .3rem !important; overflow-x: auto !important; scrollbar-width: none !important;
+}
+html.compact-overlay .hstats::-webkit-scrollbar { display: none !important; }
+html.compact-overlay .hstat { font-size: .5rem !important; padding: .2rem .4rem !important; white-space: nowrap !important; }
+html.compact-overlay .wrap { padding: .5rem .6rem 2rem !important; }
+html.compact-overlay #tables { grid-template-columns: 1fr !important; gap: .65rem !important; }
+html.compact-overlay .tcard { min-height: 170px !important; }
+html.compact-overlay .dgrid { grid-template-columns: 1fr !important; }
 </style>
 </head>
 <body>
@@ -2711,14 +2864,13 @@ function connect(){
     if(age>25) requestIndex();            // only nudge a genuinely quiet feed
   },20000);
 
-  // demo fallback if nothing arrives in 10s (still keep retrying live in background)
+  // demo fallback if nothing arrives in 3.5s (still keep retrying live in background)
   setTimeout(()=>{
     if(Object.keys(state.tables).filter(k=>state.tables[k].numbers.length).length===0){
-      showErr('Still connecting… showing demo preview. Live numbers will replace these automatically once connected. '
-        + ' (WebSocket not connected yet — check your internet connection.)');
+      showErr('Connecting to live feed… showing initial tables. Live updates appear automatically once connected.');
       loadDemo(true);
     }
-  }, 10000);
+  }, 3500);
 }
 
 /* demo numbers matching screenshots, newest FIRST */
@@ -2742,6 +2894,21 @@ function loadDemo(keepLive){
   state.connected = state.connected || !keepLive;
   renderLobby();
 }
+
+// Auto-detect overlay / PiP / mobile mode and adapt classes dynamically
+(function checkOverlayMode(){
+  try {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('overlay') === '1' || window.innerWidth <= 680 || (window.parent && window.parent !== window)) {
+      document.documentElement.classList.add('compact-overlay');
+    }
+    window.addEventListener('resize', function(){
+      if (window.innerWidth <= 680) {
+        document.documentElement.classList.add('compact-overlay');
+      }
+    });
+  } catch(e) {}
+})();
 
 restoreAllJournals();
 connect();

@@ -71,6 +71,11 @@ export function FloatingPredictionWidget() {
           height: 720,
         });
 
+        // Ensure both HTML and Body occupy 100% of the PiP window to prevent flex collapse
+        pipWindow.document.documentElement.style.height = '100%';
+        pipWindow.document.documentElement.style.width = '100%';
+        pipWindow.document.body.style.height = '100%';
+        pipWindow.document.body.style.width = '100%';
         pipWindow.document.body.style.margin = '0';
         pipWindow.document.body.style.padding = '0';
         pipWindow.document.body.style.background = '#05080f';
@@ -78,11 +83,11 @@ export function FloatingPredictionWidget() {
 
         const container = pipWindow.document.createElement('div');
         container.style.cssText =
-          'width:100%;height:100%;display:flex;flex-direction:column;position:relative;background:#05080f;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#fff;';
+          'width:100%;height:100%;display:flex;flex-direction:column;position:relative;background:#05080f;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#fff;overflow:hidden;';
 
         const header = pipWindow.document.createElement('div');
         header.style.cssText =
-          'display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#0a0f1d;border-bottom:1px solid rgba(255,255,255,0.12);user-select:none;';
+          'flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#0a0f1d;border-bottom:1px solid rgba(255,255,255,0.12);user-select:none;';
         header.innerHTML = `
           <div style="display:flex;align-items:center;gap:8px;">
             <img src="/logo.png" style="width:24px;height:24px;border-radius:50%;object-fit:cover;" />
@@ -96,11 +101,16 @@ export function FloatingPredictionWidget() {
         `;
         container.appendChild(header);
 
+        // Absolute wrapper ensures iframe fills 100% height without any flex min-height collapsing
+        const frameWrap = pipWindow.document.createElement('div');
+        frameWrap.style.cssText = 'flex:1;width:100%;height:100%;min-height:0;position:relative;overflow:hidden;';
+
         const frame = pipWindow.document.createElement('iframe');
-        frame.src = '/api/roulette-tool';
-        frame.style.cssText = 'width:100%;height:100%;flex:1;border:none;display:block;';
+        frame.src = '/api/roulette-tool?overlay=1';
+        frame.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none;display:block;';
         frame.allow = 'fullscreen';
-        container.appendChild(frame);
+        frameWrap.appendChild(frame);
+        container.appendChild(frameWrap);
 
         pipWindow.document.body.appendChild(container);
 
@@ -108,10 +118,10 @@ export function FloatingPredictionWidget() {
         const expBtn = pipWindow.document.getElementById('pip-exp');
 
         minBtn.onclick = () => {
-          pipWindow.resizeTo(320, 380);
+          pipWindow.resizeTo(360, 540);
         };
         expBtn.onclick = () => {
-          pipWindow.resizeTo(500, 750);
+          pipWindow.resizeTo(520, 780);
         };
 
         setPipActive(true);
@@ -333,7 +343,7 @@ export function FloatingPredictionWidget() {
         <div className="flex-1 relative w-full h-full min-h-0 bg-[#05090f] overflow-hidden">
           {/* Mode 1: Sandboxed Iframe (Current index.html tool) */}
           <div
-            className={`w-full h-full flex flex-col ${
+            className={`absolute inset-0 w-full h-full flex flex-col ${
               toolMode === 'iframe' ? 'block' : 'hidden'
             }`}
           >
@@ -347,7 +357,7 @@ export function FloatingPredictionWidget() {
             )}
             <iframe
               ref={iframeRef}
-              src="/api/roulette-tool"
+              src="/api/roulette-tool?overlay=1"
               title="Floating Roulette Predictor"
               className="w-full h-full flex-1 border-0 block"
               allow="fullscreen"
