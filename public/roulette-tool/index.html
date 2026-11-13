@@ -237,6 +237,29 @@ a{color:inherit;text-decoration:none}
 .fbtn{background:rgba(31,200,169,.06);border:1px solid rgba(31,200,169,.3);color:var(--teal);border-radius:.5rem;
   padding:.45rem .8rem;font-family:'Rajdhani',sans-serif;font-size:.9rem;cursor:pointer}
 .fbtn:hover{background:rgba(31,200,169,.14)}
+.min-btn{
+  background:linear-gradient(135deg,rgba(245,179,1,.15),rgba(31,200,169,.15));
+  border:1px solid rgba(245,179,1,.45);
+  color:#f5b301;
+  border-radius:.5rem;
+  padding:.42rem .75rem;
+  font-family:'Orbitron',monospace;
+  font-size:.62rem;
+  font-weight:700;
+  letter-spacing:.12em;
+  cursor:pointer;
+  transition:all .18s;
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+}
+.min-btn:hover{
+  background:linear-gradient(135deg,rgba(245,179,1,.3),rgba(31,200,169,.3));
+  border-color:rgba(245,179,1,.8);
+  box-shadow:0 0 14px rgba(245,179,1,.35);
+  color:#fff;
+  transform:scale(1.03);
+}
 /* strategy on/off chips */
 .stog-wrap{display:flex;gap:.35rem;flex-wrap:wrap;align-items:center;margin:.2rem 0 .8rem}
 .stog-wrap .lbl{font-family:'Orbitron',monospace;font-size:.55rem;letter-spacing:.16em;color:var(--muted);margin-right:.2rem}
@@ -276,6 +299,7 @@ a{color:inherit;text-decoration:none}
     <div class="logo"><div class="logo-mark">🎡</div><div>LIVE ROULETTE<small>LIVE TRACKER</small></div></div>
     <div class="status-pill"><span id="statusDot" class="dot conn"></span><span id="statusText">CONNECTING…</span></div>
     <button id="refreshBtn" class="fbtn" title="Force reconnect to the live feed">↻ Refresh feed</button>
+    <button id="minBtn" class="min-btn" title="Minimize tool to Messenger floating bubble">🗕 MINIMIZE</button>
     <span id="feedAge" class="feed-age">waiting…</span>
     <div class="hstats">
       <div class="hstat" title="Continuous W/L across all active roulette tables">ALL TABLES W/L <b id="allTablesWL">0W / 0L (–)</b></div>
@@ -815,6 +839,17 @@ function renderDetail(){
     document.getElementById('stRed').textContent=r; document.getElementById('stBlack').textContent=b; document.getElementById('stGreen').textContent=g;
   }
   renderPredictions();
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({
+        type: 'ROULETTE_PREDICTION_UPDATE',
+        tableName: tableDisplayName(id),
+        provider: provOf(id),
+        lastNumbers: nums.slice(0, 5),
+        predictedPocket: PRED.best ? (PRED.best.pocket || PRED.best.key) : (nums.length ? nums[0] + 'n1' : '25n1')
+      }, '*');
+    }
+  } catch(e) {}
 }
 
 /* ================= PREDICTION ENGINE ================= */
@@ -2516,6 +2551,23 @@ function startWatchdog(){
 }
 function forceReload(){ setStatus('conn','REFRESHING…'); FAILS=0; LAST_DATA=0; hardReconnect('manual'); }
 document.getElementById('refreshBtn').onclick=forceReload;
+
+// Minimize to Messenger Floating Bubble handler
+(function wireMinimize(){
+  var mb = document.getElementById('minBtn');
+  if(!mb) return;
+  mb.onclick = function(){
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'ROULETTE_TOOL_MINIMIZE' }, '*');
+      } else {
+        alert('Tool is running standalone. In the web platform, this minimizes to a Messenger-style floating bubble.');
+      }
+    } catch(err) {
+      console.warn('Minimize postMessage:', err);
+    }
+  };
+})();
 
 /* Browsers throttle timers and can suspend the socket in a background tab —
    these two handlers are what stop the feed from staying stuck after you

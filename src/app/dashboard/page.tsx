@@ -43,6 +43,7 @@ import {
 import { PremiumLockModal } from '../../components/PremiumLockModal';
 import { NotificationBell } from '../../components/NotificationBell';
 import { ProfileView } from '../../components/ProfileView';
+import { useToolWidget } from '../../context/ToolWidgetContext';
 
 type DashboardTab =
   | 'overview'
@@ -224,9 +225,19 @@ export default function DashboardPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const { openToolWidget, minimizeToolWidget } = useToolWidget();
+
   const handleOpenTool = () => {
     if (user.hasActiveSubscription || isSuperAdmin || isModerator) {
       router.push('/dashboard/tool');
+    } else {
+      setLockModalOpen(true);
+    }
+  };
+
+  const handleOpenFloatingWidget = () => {
+    if (user.hasActiveSubscription || isSuperAdmin || isModerator) {
+      openToolWidget();
     } else {
       setLockModalOpen(true);
     }
@@ -937,13 +948,24 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={handleOpenTool}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-emerald-400 bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-3 font-display text-xs font-black uppercase tracking-wider text-black shadow-lg shadow-emerald-500/25 hover:scale-105 active:scale-95 transition-all"
-                  >
-                    <Terminal className="h-4 w-4 text-black" />
-                    <span>Open Live Terminal</span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      onClick={handleOpenFloatingWidget}
+                      className="flex items-center justify-center gap-2 rounded-xl border border-amber-400 bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2.5 font-display text-xs font-black uppercase tracking-wider text-black shadow-lg shadow-amber-500/25 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                      title="Open as Floating Messenger Bubble Widget"
+                    >
+                      <Sparkles className="h-4 w-4 text-black" />
+                      <span>Floating Widget</span>
+                    </button>
+
+                    <button
+                      onClick={handleOpenTool}
+                      className="flex items-center justify-center gap-2 rounded-xl border border-emerald-400 bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-2.5 font-display text-xs font-black uppercase tracking-wider text-black shadow-lg shadow-emerald-500/25 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                    >
+                      <Terminal className="h-4 w-4 text-black" />
+                      <span>Fullscreen View</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="pt-6 space-y-4">

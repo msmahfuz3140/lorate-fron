@@ -8,6 +8,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { authClient } from '../../../lib/auth-client';
 import { AccessStatusResponse, SubscriptionStatus } from '../../../shared/subscriptions';
 import { PremiumLockOverlay } from '../../../components/PremiumLockOverlay';
+import { useToolWidget } from '../../../context/ToolWidgetContext';
 import {
   Activity,
   ArrowLeft,
@@ -18,12 +19,14 @@ import {
   ExternalLink,
   AlertCircle,
   CheckCircle2,
-  Lock
+  Lock,
+  Minus
 } from 'lucide-react';
 
 export default function DashboardToolPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
+  const { minimizeToolWidget } = useToolWidget();
 
   const [accessStatus, setAccessStatus] = useState<AccessStatusResponse | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
@@ -265,6 +268,19 @@ export default function DashboardToolPage() {
                 </Link>
               </div>
             )}
+
+            <button
+              onClick={() => {
+                minimizeToolWidget();
+                router.push('/dashboard');
+              }}
+              title="Minimize into floating Messenger bubble"
+              className="flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/20 to-amber-600/20 px-3 py-1.5 font-display text-xs font-bold uppercase tracking-wider text-amber-300 hover:from-amber-500/30 hover:to-amber-600/30 hover:border-amber-400 transition-all shadow-[0_0_12px_rgba(245,158,11,0.2)] active:scale-95 cursor-pointer"
+            >
+              <Minus className="h-3.5 w-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Minimize to Bubble</span>
+              <span className="sm:hidden">Minimize</span>
+            </button>
 
             <button
               onClick={handleRefresh}
