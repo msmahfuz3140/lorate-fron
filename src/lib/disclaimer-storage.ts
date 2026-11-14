@@ -55,6 +55,9 @@ export function markDisclaimerPendingAfterLogin(): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(LOGIN_PENDING_KEY, '1');
+    // Same-tab notification: the storage event does not fire in the tab that
+    // performed the write, and the user id may be unchanged on a re-login.
+    window.dispatchEvent(new Event('roulette-disclaimer-login'));
   } catch {
     // Ignore storage errors.
   }

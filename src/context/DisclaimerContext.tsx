@@ -38,6 +38,16 @@ export function DisclaimerProvider({ children }: { children: React.ReactNode }) 
     setIsOpen(true);
   }, [user?.id]);
 
+  // Same-tab login event, including a re-login with the same user id.
+  useEffect(() => {
+    const handleLogin = () => {
+      if (isDisclaimerPendingAfterLogin()) setIsOpen(true);
+    };
+    window.addEventListener('roulette-disclaimer-login', handleLogin);
+    return () =>
+      window.removeEventListener('roulette-disclaimer-login', handleLogin);
+  }, []);
+
   const requestToolAccess = useCallback(
     (action: () => void) => {
       if (hasAcknowledgedDisclaimer(user?.id)) {
@@ -57,8 +67,10 @@ export function DisclaimerProvider({ children }: { children: React.ReactNode }) 
     clearDisclaimerPendingAfterLogin();
     setIsOpen(false);
 
+    // Execute synchronously from the click handler so Document Picture-in-Picture
+    // retains the required transient user activation.
     if (action) {
-      window.setTimeout(action, 0);
+      action();
     }
   }, [user?.id]);
 

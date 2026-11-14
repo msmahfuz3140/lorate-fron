@@ -26,7 +26,7 @@ import {
 export default function DashboardToolPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
-  const { openBettingOverlay } = useToolWidget();
+  const { openToolSideWindow } = useToolWidget();
 
   const [accessStatus, setAccessStatus] = useState<AccessStatusResponse | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
@@ -270,13 +270,14 @@ export default function DashboardToolPage() {
             )}
 
             <button
-              onClick={() => openBettingOverlay()}
-              className="flex items-center gap-1.5 rounded-xl border border-teal-500/40 bg-teal-500/15 px-3 py-1.5 font-display text-xs font-bold uppercase tracking-wider text-teal-300 transition-all hover:bg-teal-500/25"
-              title="Open the persistent betting-site side overlay"
+              onClick={() => {
+                void openToolSideWindow();
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-teal-500/40 bg-teal-500/15 text-teal-300 transition-all hover:bg-teal-500/25"
+              title="Open tool in a persistent side window"
+              aria-label="Open tool in a persistent side window"
             >
-              <Globe2 className="h-3.5 w-3.5 text-teal-400" />
-              <span className="hidden sm:inline">Open Side Overlay</span>
-              <span className="sm:hidden">Overlay</span>
+              <Globe2 className="h-4 w-4" />
             </button>
 
             <button

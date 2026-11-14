@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   ArrowRightLeft,
   ChevronDown,
-  Globe2,
   Info,
   Layers,
   Radio,
@@ -183,7 +182,7 @@ function deriveSpins(
 
 export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps) {
   const { user, isLoading: authLoading } = useAuth();
-  const { updatePredictionData, openBettingOverlay } = useToolWidget();
+  const { updatePredictionData } = useToolWidget();
   const isAdmin = user?.role === 'SUPER_ADMIN';
 
   const [tables, setTables] = useState<DsTableRow[]>([]);
@@ -892,16 +891,6 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
             title="Refresh live data"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => openBettingOverlay()}
-            className="inline-flex items-center gap-1 rounded-lg border border-teal-500/40 bg-teal-500/10 px-2.5 py-1.5 font-mono text-[10px] font-bold uppercase text-teal-300 hover:bg-teal-500/20"
-            title="Open persistent betting-site overlay"
-          >
-            <Globe2 className="h-3 w-3" />
-            Overlay
           </button>
 
           {isAdmin && (

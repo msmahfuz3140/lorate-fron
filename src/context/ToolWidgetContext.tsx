@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 
 export type ToolMode = 'iframe' | 'api';
 
@@ -20,13 +20,8 @@ interface ToolWidgetContextType {
   toolMode: ToolMode;         // 'iframe' (index.html) or 'api' (future API system)
   predictionData: PredictionData;
   hasAccess: boolean;
-  bettingOverlayOpen: boolean;
-  bettingOverlayUrl: string;
-
-  // Actions
-  openBettingOverlay: (url?: string) => void;
-  closeBettingOverlay: () => void;
-  setBettingOverlayUrl: (url: string) => void;
+  // Side tool window (Document Picture-in-Picture or fallback popup)
+  openToolSideWindow: () => void;
   openToolWidget: () => void;
   minimizeToolWidget: () => void;
   toggleToolWidget: () => void;
@@ -34,7 +29,6 @@ interface ToolWidgetContextType {
   setToolMode: (mode: ToolMode) => void;
   updatePredictionData: (data: Partial<PredictionData>) => void;
   setHasAccess: (access: boolean) => void;
-  popoutToolWindow: () => void;
 }
 
 const ToolWidgetContext = createContext<ToolWidgetContextType | undefined>(undefined);
@@ -46,8 +40,7 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
   const [isWidgetActive, setIsWidgetActive] = useState(true);
   const [toolMode, setToolModeState] = useState<ToolMode>('iframe');
   const [hasAccess, setHasAccess] = useState(true);
-  const [bettingOverlayOpen, setBettingOverlayOpen] = useState(false);
-  const [bettingOverlayUrl, setBettingOverlayUrlState] = useState('');
+  const sideWindowRef = useRef<any>(null);
   const [predictionData, setPredictionData] = useState<PredictionData>({
     // Empty until the real API returns a table/prediction. No mock numbers or
     // fabricated confidence values are placed in the widget state.
@@ -96,8 +89,6 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
         setToolModeState(savedMode);
       }
 
-      const savedBettingUrl = sessionStorage.getItem('sloot_betting_overlay_url');
-      if (savedBettingUrl) setBettingOverlayUrlState(savedBettingUrl);
     } catch {}
 
     // Cross-tab sync listener
@@ -246,38 +237,87 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
     });
   }, [broadcastMessage]);
 
-  const openBettingOverlay = useCallback((url?: string) => {
-    if (url && url.trim()) {
-      const clean = url.trim();
-      setBettingOverlayUrlState(clean);
-      try {
-        sessionStorage.setItem('sloot_betting_overlay_url', clean);
-      } catch {}
-    }
-    setBettingOverlayOpen(true);
-  }, []);
-
-  const closeBettingOverlay = useCallback(() => {
-    setBettingOverlayOpen(false);
-  }, []);
-
-  const setBettingOverlayUrl = useCallback((url: string) => {
-    const clean = url.trim();
-    setBettingOverlayUrlState(clean);
-    try {
-      if (clean) sessionStorage.setItem('sloot_betting_overlay_url', clean);
-      else sessionStorage.removeItem('sloot_betting_overlay_url');
-    } catch {}
-  }, []);
-
-  const popoutToolWindow = useCallback(() => {
+  /**
+   * Opens the actual prediction tool in a persistent side window.
+   *
+   * Document Picture-in-Picture is always-on-top and remains visible when the
+   * user switches browser tabs. Browsers without it get a normal popup window
+   * fallback, which also remains open across tab switches.
+   */
+  const openToolSideWindow = useCallback(async () => {
     if (typeof window === 'undefined') return;
-    const width = 450;
-    const height = 700;
-    const left = Math.max(0, window.screen.availWidth - width - 20);
-    const top = 50;
+
+    const existing = sideWindowRef.current;
+    if (existing && !existing.closed) {
+      try {
+        existing.focus();
+        return;
+      } catch {
+        sideWindowRef.current = null;
+      }
+    }
+
+    const pip = (window as any).documentPictureInPicture;
+    if (pip?.requestWindow) {
+      try {
+        const pipWindow: Window = await pip.requestWindow({
+          width: 480,
+          height: 760
+        });
+
+        pipWindow.document.documentElement.style.height = '100%';
+        pipWindow.document.body.style.height = '100%';
+        pipWindow.document.body.style.margin = '0';
+        pipWindow.document.body.style.background = '#05080f';
+        pipWindow.document.body.style.overflow = 'hidden';
+
+        const container = pipWindow.document.createElement('div');
+        container.style.cssText =
+          'display:flex;flex-direction:column;width:100%;height:100%;background:#05080f;color:#fff;';
+
+        const header = pipWindow.document.createElement('div');
+        header.style.cssText =
+          'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:#08111c;border-bottom:1px solid rgba(255,255,255,0.12);font-family:-apple-system,BlinkMacSystemFont,sans-serif;flex-shrink:0;';
+        header.innerHTML =
+          '<div style="display:flex;align-items:center;gap:7px;min-width:0;">' +
+          '<span style="width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e;"></span>' +
+          '<span style="font-size:10px;font-weight:900;letter-spacing:0.08em;color:#f5b301;white-space:nowrap;">ROULETTE COMPUTER</span>' +
+          '<span style="font-size:9px;color:#94a3b8;white-space:nowrap;">SIDE TOOL</span>' +
+          '</div>' +
+          '<button id="side-close" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.16);color:#cbd5e1;border-radius:6px;padding:4px 8px;font-size:10px;font-weight:700;cursor:pointer;">Close ✕</button>';
+
+        const frame = pipWindow.document.createElement('iframe');
+        frame.src = '/dashboard/tool?popup=1&side=1';
+        frame.style.cssText = 'flex:1;width:100%;height:100%;border:0;display:block;background:#05080f;';
+
+        container.appendChild(header);
+        container.appendChild(frame);
+        pipWindow.document.body.appendChild(container);
+
+        const closeBtn = pipWindow.document.getElementById('side-close');
+        if (closeBtn) closeBtn.onclick = () => pipWindow.close();
+
+        sideWindowRef.current = pipWindow;
+        pipWindow.addEventListener('pagehide', () => {
+          sideWindowRef.current = null;
+        });
+        return;
+      } catch {
+        // Fall through to the popup implementation below.
+      }
+    }
+
+    const width = 480;
+    const height = 760;
+    const left = Math.max(0, window.screen.availWidth - width - 24);
+    const top = 48;
     const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no,location=no`;
-    window.open('/dashboard/tool?popup=1', 'RouletteFloatingPredictor', features);
+    const popup = window.open(
+      '/dashboard/tool?popup=1&side=1',
+      'RouletteToolSide',
+      features
+    );
+    sideWindowRef.current = popup;
   }, []);
 
   return (
@@ -289,11 +329,7 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
         toolMode,
         predictionData,
         hasAccess,
-        bettingOverlayOpen,
-        bettingOverlayUrl,
-        openBettingOverlay,
-        closeBettingOverlay,
-        setBettingOverlayUrl,
+        openToolSideWindow,
         openToolWidget,
         minimizeToolWidget,
         toggleToolWidget,
@@ -301,7 +337,6 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
         setToolMode,
         updatePredictionData,
         setHasAccess,
-        popoutToolWindow,
       }}
     >
       {children}

@@ -27,7 +27,6 @@ import { PremiumLockModal } from './PremiumLockModal';
 import { useDisclaimer } from '../context/DisclaimerContext';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../context/AuthContext';
-import { useToolWidget } from '../context/ToolWidgetContext';
 
 export function Navbar() {
   const router = useRouter();
@@ -38,7 +37,6 @@ export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(56);
   const { user, isAuthenticated, logout } = useAuth();
-  const { openToolWidget } = useToolWidget();
   const { requestToolAccess } = useDisclaimer();
 
   const headerRef = useRef<HTMLElement>(null);
@@ -325,30 +323,6 @@ export function Navbar() {
                             <span>Launch Live Tool</span>
                           </div>
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            requestToolAccess(() => {
-                              setUserDropdownOpen(false);
-                              setMobileMenuOpen(false);
-                              if (user?.hasActiveSubscription || user?.role === 'SUPER_ADMIN' || user?.role === 'MODERATOR') {
-                                openToolWidget();
-                              } else if (!isAuthenticated) {
-                                router.push('/golin?redirect=/dashboard/tool');
-                              } else {
-                                setLockModalOpen(true);
-                              }
-                            })
-                          }
-                          className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-left font-display text-xs font-bold text-amber-300 hover:bg-amber-500/10 border border-amber-500/20 transition-all cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <Sparkles className="h-4 w-4 text-amber-400" />
-                            <span>Floating Tool (Bubble)</span>
-                          </div>
-                          <span className="text-[10px] text-amber-400 font-mono">🗕 Float</span>
                         </button>
 
                         <Link

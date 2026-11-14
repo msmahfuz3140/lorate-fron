@@ -28,7 +28,6 @@ import { AuthProvider } from '../context/AuthContext';
 import { DisclaimerProvider } from '../context/DisclaimerContext';
 import { ToolWidgetProvider } from '../context/ToolWidgetContext';
 import { FloatingPredictionWidget } from '../components/FloatingPredictionWidget';
-import { PersistentBettingOverlay } from '../components/PersistentBettingOverlay';
 
 export default function RootLayout({
   children,
@@ -43,7 +42,6 @@ export default function RootLayout({
             <ToolWidgetProvider>
               {children}
               <FloatingPredictionWidget />
-              <PersistentBettingOverlay />
             </ToolWidgetProvider>
           </DisclaimerProvider>
         </AuthProvider>
