@@ -42,13 +42,13 @@ export function Footer() {
               <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full p-0.5 bg-gradient-to-br from-amber-400 via-amber-600 to-amber-950 shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-transform group-hover:scale-105">
                 <img
                   src="/logo.png"
-                  alt="Roulette.tools Official Logo"
+                  alt="Roulette Computer Official Logo"
                   className="h-full w-full rounded-full object-cover"
                 />
               </div>
               <div className="flex flex-col">
                 <span className="font-display text-base font-black tracking-wider text-white">
-                  ROULETTE<span className="text-amber-400">.TOOLS</span>
+                  ROULETTE <span className="text-amber-400">COMPUTER</span>
                 </span>
                 <span className="font-display text-[9px] uppercase tracking-widest text-amber-400/80 -mt-0.5">
                   PREDICTION INTELLIGENCE
@@ -163,7 +163,7 @@ export function Footer() {
 
         {/* Bottom Disclaimer & Copyright */}
         <div className="border-t border-white/5 pt-8 flex flex-col sm:flex-row items-center justify-between text-[11px] font-display text-slate-500 gap-4">
-          <p>© 2026 Roulette.tools. All rights reserved.</p>
+          <p>© 2026 Roulette Computer. All rights reserved.</p>
           <p className="tracking-widest uppercase text-slate-600 text-center sm:text-right">
             Single-Zero European Roulette Intelligence • Strict Zero-Custody Architecture
           </p>
@@ -172,3 +172,4 @@ export function Footer() {
     </footer>
   );
 }
+

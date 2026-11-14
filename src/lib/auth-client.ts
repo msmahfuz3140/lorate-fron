@@ -657,6 +657,37 @@ export const authClient = {
     return request<any>(`/moderator/referred-users${qs}`);
   },
 
+  // --- Financial Accounting & Payouts ---
+  async getAdminFinancialSummary(): Promise<any> {
+    return request<any>('/admin/financial/summary', { bypassCache: true });
+  },
+
+  async getAdminFinancialTransactions(params?: {
+    type?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<any> {
+    return request<any>(`/admin/financial/transactions${buildQueryString(params)}`, {
+      bypassCache: true
+    });
+  },
+
+  async createAdminPayout(input: {
+    amountUsd: number | string;
+    description?: string;
+    method?: string;
+    reference?: string;
+    idempotencyKey: string;
+  }): Promise<any> {
+    return request<any>('/admin/financial/payouts', {
+      method: 'POST',
+      body: JSON.stringify(input)
+    });
+  },
+
   // --- Phase 8: Tool Management & Operational Status ---
   async getPublicToolStatus(): Promise<any> {
     return request<any>('/tool/status');
@@ -827,6 +858,13 @@ export const authClient = {
   async getDsTablePrediction(tableId: string, direction: string = 'CW', window: number = 25): Promise<any> {
     return requestRaw<any>(
       `/ds/tables/${encodeURIComponent(tableId)}/prediction?direction=${encodeURIComponent(direction)}&window=${encodeURIComponent(String(window))}`,
+      { bypassCache: true }
+    );
+  },
+
+  async getDsTableRhythm(tableId: string): Promise<any> {
+    return requestRaw<any>(
+      `/ds/tables/${encodeURIComponent(tableId)}/rhythm`,
       { bypassCache: true }
     );
   },

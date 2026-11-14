@@ -42,7 +42,7 @@ export default function FeaturesPage() {
             </h1>
 
             <p className="mx-auto max-w-3xl text-base sm:text-lg text-slate-400 leading-relaxed">
-              Roulette.tools monitors live casino wheel dynamics across 20+ tables from Evolution Gaming and Pragmatic Play.
+              Roulette Computer monitors live casino wheel dynamics across 20+ tables from Evolution Gaming and Pragmatic Play.
               Our algorithmic engine processes wheel sector velocity, historical pocket dispersal, and croupier ball-release cadence.
             </p>
 
@@ -254,3 +254,4 @@ export default function FeaturesPage() {
     </div>
   );
 }
+

@@ -325,6 +325,187 @@ export function extractApiError(raw: any): { code?: string; message: string } | 
   return null;
 }
 
+export type RhythmClassification = 'GOOD' | 'WARN' | 'BUILDING';
+
+export interface NormalizedRhythm {
+  ready: boolean;
+  rate: number | null;
+  percent: number | null;
+  hits: number;
+  misses: number;
+  total: number;
+  band: number;
+  window: number;
+  good: boolean;
+  classification: RhythmClassification;
+  flags: boolean[];
+  last40: boolean[];
+  series: Array<{ jumpIndex: number; hit: boolean }>;
+  longestHitRun: number;
+  longestMissRun: number;
+  tableId?: string;
+  tableName?: string;
+  dealer?: string;
+  provider?: string;
+  raw: any;
+}
+
+function longestRun(flags: boolean[], value: boolean): number {
+  let best = 0;
+  let current = 0;
+  for (const flag of flags) {
+    if (flag === value) {
+      current += 1;
+      if (current > best) best = current;
+    } else {
+      current = 0;
+    }
+  }
+  return best;
+}
+
+/**
+ * Normalize the official Rhythm API response. Never invents a percentage: when
+ * the provider has insufficient data, percent stays null and classification is
+ * BUILDING.
+ */
+export function normalizeRhythm(payload: any, fallbackTableId?: string): NormalizedRhythm | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const raw = payload.rhythm || payload;
+
+  const flags = Array.isArray(raw.flags)
+    ? raw.flags.map((value: any) => value === true || value === 1 || value === 'true')
+    : Array.isArray(raw.last_40)
+      ? raw.last_40.map((value: any) => value === true || value === 1 || value === 'true')
+      : [];
+
+  const hits = typeof raw.hits === 'number' ? raw.hits : flags.filter(Boolean).length;
+  const misses =
+    typeof raw.misses === 'number' ? raw.misses : Math.max(0, flags.length - hits);
+  const total =
+    typeof raw.total === 'number'
+      ? raw.total
+      : hits + misses > 0
+        ? hits + misses
+        : flags.length;
+
+  const computedRate = total > 0 ? hits / total : null;
+  const percentProvided =
+    typeof raw.percent === 'number' && Number.isFinite(raw.percent)
+      ? Math.round(Math.max(0, Math.min(100, raw.percent)))
+      : null;
+  const rate =
+    typeof raw.rate === 'number' && Number.isFinite(raw.rate)
+      ? Math.max(0, Math.min(1, raw.rate))
+      : computedRate !== null
+        ? computedRate
+        : percentProvided !== null
+          ? percentProvided / 100
+          : null;
+
+  const percent =
+    percentProvided !== null
+      ? percentProvided
+      : rate !== null
+        ? Math.round(rate * 100)
+        : null;
+
+  const ready =
+    raw.ready !== undefined
+      ? raw.ready !== false && (total > 0 || rate !== null)
+      : total >= WIN_MIN && rate !== null;
+  const rawClassification =
+    typeof raw.classification === 'string' ? raw.classification.toUpperCase() : '';
+  const classification: RhythmClassification =
+    !ready || rawClassification === 'BUILDING'
+      ? 'BUILDING'
+      : rawClassification === 'GOOD'
+        ? 'GOOD'
+        : rawClassification === 'WARN'
+          ? 'WARN'
+          : rate !== null && rate >= 0.85
+            ? 'GOOD'
+            : 'WARN';
+
+  const series = Array.isArray(raw.series)
+    ? raw.series
+        .map((item: any) => ({
+          jumpIndex: typeof item?.jump_index === 'number' ? item.jump_index : 0,
+          hit: item?.hit === true || item?.hit === 1
+        }))
+        .filter((item: any) => item.jumpIndex > 0)
+    : [];
+
+  const last40 = Array.isArray(raw.last_40)
+    ? raw.last_40.map((value: any) => value === true || value === 1 || value === 'true')
+    : flags.slice(-40);
+
+  return {
+    ready,
+    rate,
+    percent: ready ? percent : null,
+    hits,
+    misses,
+    total,
+    band: typeof raw.band === 'number' ? raw.band : BAND,
+    window: typeof raw.window === 'number' ? raw.window : WIN_MIN,
+    good: raw.good === true || (ready && rate !== null && rate >= 0.85),
+    classification,
+    flags,
+    last40,
+    series,
+    longestHitRun:
+      typeof raw.longest_hit_run === 'number'
+        ? raw.longest_hit_run
+        : longestRun(flags, true),
+    longestMissRun:
+      typeof raw.longest_miss_run === 'number'
+        ? raw.longest_miss_run
+        : longestRun(flags, false),
+    tableId: typeof raw.table_id === 'string' ? raw.table_id : fallbackTableId,
+    tableName: typeof raw.table_name === 'string' ? raw.table_name : undefined,
+    dealer: typeof raw.dealer === 'string' ? raw.dealer : undefined,
+    provider: typeof raw.provider === 'string' ? raw.provider : undefined,
+    raw
+  };
+}
+
+/** Extract rhythm from the table-list row fields when the API provides them. */
+export function rhythmFromTableRow(table: any): NormalizedRhythm | null {
+  if (!table || typeof table !== 'object') return null;
+  if (table.rhythm && typeof table.rhythm === 'object') {
+    return normalizeRhythm({ ...table.rhythm, table_id: table.id }, table.id);
+  }
+  if (
+    typeof table.rhythm_percent !== 'number' &&
+    typeof table.rhythm !== 'number' &&
+    typeof table.rhythm_rate !== 'number'
+  ) {
+    return null;
+  }
+  const inlineRate =
+    typeof table.rhythm_rate === 'number'
+      ? table.rhythm_rate
+      : typeof table.rhythm === 'number'
+        ? table.rhythm
+        : undefined;
+  return normalizeRhythm(
+    {
+      ready: table.rhythm_status !== 'BUILDING',
+      percent:
+        typeof table.rhythm_percent === 'number'
+          ? table.rhythm_percent
+          : undefined,
+      rate: inlineRate,
+      hits: table.rhythm_hits,
+      total: table.rhythm_total,
+      classification: table.rhythm_status,
+      table_id: table.id
+    },
+    table.id
+  );
+}
+
 export interface NormalizedPrediction {
   ready: boolean;
   direction: Direction;

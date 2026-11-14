@@ -34,7 +34,7 @@ export default function PrivacyPage() {
                 1. Information We Collect
               </h2>
               <p>
-                To provide authenticated access and ensure system security, Roulette.tools collects minimal necessary account identifiers:
+                To provide authenticated access and ensure system security, Roulette Computer collects minimal necessary account identifiers:
               </p>
               <ul className="list-disc pl-5 space-y-1.5 text-slate-400">
                 <li><strong className="text-slate-200">Contact Method:</strong> Your email address or international E.164 phone number.</li>
@@ -110,3 +110,4 @@ export default function PrivacyPage() {
     </div>
   );
 }
+

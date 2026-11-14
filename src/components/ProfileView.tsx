@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
+import { useDisclaimer } from '../context/DisclaimerContext';
 import { authClient } from '../lib/auth-client';
 import { UserRole } from '../shared/roles';
 import { COUNTRY_CODES, formatToE164 } from '../data/countries';
@@ -101,6 +102,7 @@ export function StylizedManAvatar({ className = "h-24 w-24" }: { className?: str
 
 export function ProfileView() {
   const router = useRouter();
+  const { requestToolAccess } = useDisclaimer();
   const { user, refreshUser, isAuthenticated, isLoading } = useAuth();
 
   // --- Profile Edit State ---
@@ -470,6 +472,10 @@ export function ProfileView() {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
             <Link
               href="/dashboard/tool"
+              onClick={(event) => {
+                event.preventDefault();
+                requestToolAccess(() => router.push('/dashboard/tool'));
+              }}
               className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500/50 bg-gradient-to-r from-emerald-500/20 via-emerald-600/15 to-teal-500/20 px-4 py-2.5 font-display text-xs font-black uppercase tracking-wider text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.25)] hover:scale-[1.02] active:scale-98 transition-all"
             >
               <Terminal className="h-4 w-4 text-emerald-400" />

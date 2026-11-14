@@ -41,6 +41,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { PremiumLockModal } from '../../components/PremiumLockModal';
+import { useDisclaimer } from '../../context/DisclaimerContext';
 import { NotificationBell } from '../../components/NotificationBell';
 import { ProfileView } from '../../components/ProfileView';
 import { useToolWidget } from '../../context/ToolWidgetContext';
@@ -226,6 +227,7 @@ export default function DashboardPage() {
   };
 
   const { openToolWidget, minimizeToolWidget } = useToolWidget();
+  const { requestToolAccess } = useDisclaimer();
 
   const handleOpenTool = () => {
     if (user.hasActiveSubscription || isSuperAdmin || isModerator) {
@@ -264,13 +266,13 @@ export default function DashboardPage() {
               <div className="relative flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full p-0.5 bg-gradient-to-br from-amber-400 via-amber-600 to-amber-950 shadow-[0_0_15px_rgba(245,158,11,0.35)] transition-transform group-hover:scale-105">
                 <img
                   src="/logo.png"
-                  alt="Roulette.tools Official Emblem"
+                  alt="Roulette Computer Official Emblem"
                   className="h-full w-full rounded-full object-cover"
                 />
               </div>
               <div className="flex flex-col">
                 <span className="font-display text-sm sm:text-base font-black tracking-wider text-white">
-                  ROULETTE<span className="text-amber-400">.TOOLS</span>
+                  ROULETTE <span className="text-amber-400">COMPUTER</span>
                 </span>
                 <span className="font-display text-[9px] uppercase tracking-widest text-slate-400 hidden sm:inline">
                   Member Portal
@@ -305,7 +307,7 @@ export default function DashboardPage() {
 
             {/* Open Tool CTA */}
             <button
-              onClick={handleOpenTool}
+              onClick={() => requestToolAccess(handleOpenTool)}
               className="flex items-center gap-1.5 rounded-xl border border-emerald-500/50 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 px-3 sm:px-3.5 py-1.5 font-display text-xs font-black uppercase tracking-wider text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:scale-105 transition-all active:scale-95"
             >
               <Terminal className="h-3.5 w-3.5 text-emerald-400" />
@@ -626,7 +628,7 @@ export default function DashboardPage() {
 
                   <div className="flex items-center gap-2.5">
                     <button
-                      onClick={handleOpenTool}
+                      onClick={() => requestToolAccess(handleOpenTool)}
                       className="flex items-center gap-2 rounded-xl border border-emerald-500/50 bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-2.5 font-display text-xs font-black uppercase tracking-wider text-black shadow-lg shadow-emerald-500/25 hover:brightness-110 active:scale-95 transition-all"
                     >
                       <Terminal className="h-4 w-4 text-black" />
@@ -745,7 +747,7 @@ export default function DashboardPage() {
 
                   <div className="shrink-0 flex flex-col gap-2.5">
                     <button
-                      onClick={handleOpenTool}
+                      onClick={() => requestToolAccess(handleOpenTool)}
                       className="flex items-center justify-center gap-2 rounded-2xl border border-emerald-400 bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-500 px-6 py-3.5 font-display text-xs font-black uppercase tracking-wider text-black shadow-[0_0_25px_rgba(16,185,129,0.35)] hover:scale-105 active:scale-95 transition-all"
                     >
                       <Terminal className="h-4 w-4" />
@@ -950,7 +952,7 @@ export default function DashboardPage() {
 
                   <div className="flex flex-wrap items-center gap-2.5">
                     <button
-                      onClick={handleOpenFloatingWidget}
+                      onClick={() => requestToolAccess(handleOpenFloatingWidget)}
                       className="flex items-center justify-center gap-2 rounded-xl border border-amber-400 bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2.5 font-display text-xs font-black uppercase tracking-wider text-black shadow-lg shadow-amber-500/25 hover:scale-105 active:scale-95 transition-all cursor-pointer"
                       title="Open as Floating Messenger Bubble Widget"
                     >
@@ -959,7 +961,7 @@ export default function DashboardPage() {
                     </button>
 
                     <button
-                      onClick={handleOpenTool}
+                      onClick={() => requestToolAccess(handleOpenTool)}
                       className="flex items-center justify-center gap-2 rounded-xl border border-emerald-400 bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-2.5 font-display text-xs font-black uppercase tracking-wider text-black shadow-lg shadow-emerald-500/25 hover:scale-105 active:scale-95 transition-all cursor-pointer"
                     >
                       <Terminal className="h-4 w-4 text-black" />
@@ -1005,7 +1007,7 @@ export default function DashboardPage() {
                   Affiliate & Referral Center
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
-                  Invite players to Roulette.tools using your unique referral code.
+                  Invite players to Roulette Computer using your unique referral code.
                 </p>
               </div>
 
@@ -1448,3 +1450,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

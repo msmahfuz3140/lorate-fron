@@ -34,7 +34,7 @@ export default function SubscriptionPolicyPage() {
                 1. Authoritative Subscription Tiers & Pricing
               </h2>
               <p>
-                Roulette.tools maintains five authoritative subscription plans stored in decimal-safe integer cents:
+                Roulette Computer maintains five authoritative subscription plans stored in decimal-safe integer cents:
               </p>
               <div className="rounded-xl border border-white/10 bg-[#0c1017] p-4 font-mono text-xs space-y-2">
                 <div className="flex justify-between border-b border-white/5 pb-1 text-slate-200">
@@ -117,3 +117,4 @@ export default function SubscriptionPolicyPage() {
     </div>
   );
 }
+

@@ -15,7 +15,7 @@ interface FaqItem {
 const FAQ_LIST: FaqItem[] = [
   {
     category: 'Platform',
-    q: 'Does Roulette.tools guarantee winnings or 100% win rate?',
+    q: 'Does Roulette Computer guarantee winnings or 100% win rate?',
     a: 'Absolutely not. We strictly refuse to make false claims of guaranteed winnings or infallible accuracy. European Roulette remains a probabilistic casino game with an inherent house edge (2.7% on single-zero wheels). Our platform provides pattern recognition, pocket distance dispersion telemetry (0-3), and dealer signature tracking to assist disciplined session play, but cannot eliminate house edge or eliminate financial risk.'
   },
   {
@@ -46,7 +46,7 @@ const FAQ_LIST: FaqItem[] = [
   {
     category: 'Payments',
     q: 'Can I deposit money or withdraw funds from this platform?',
-    a: 'No. Roulette.tools is exclusively an analytical software platform (SaaS). We do not provide casino gaming services, gambling accounts, wallet custody, or client deposit/withdrawal functionality. You purchase a digital subscription to access prediction telemetry.'
+    a: 'No. Roulette Computer is exclusively an analytical software platform (SaaS). We do not provide casino gaming services, gambling accounts, wallet custody, or client deposit/withdrawal functionality. You purchase a digital subscription to access prediction telemetry.'
   },
   {
     category: 'Referrals',
@@ -175,3 +175,4 @@ export default function FaqPage() {
     </div>
   );
 }
+

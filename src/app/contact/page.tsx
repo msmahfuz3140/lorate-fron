@@ -265,7 +265,7 @@ export default function ContactPage() {
                     No Custody Policy
                   </div>
                   <p className="text-xs text-slate-400 leading-relaxed">
-                    Please do not contact us requesting gambling balances or withdrawals. Roulette.tools does not hold user funds.
+                    Please do not contact us requesting gambling balances or withdrawals. Roulette Computer does not hold user funds.
                   </p>
                 </div>
               </div>
@@ -278,3 +278,4 @@ export default function ContactPage() {
     </div>
   );
 }
+

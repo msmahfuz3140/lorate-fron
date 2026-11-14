@@ -74,7 +74,7 @@ export default function HowItWorksPage() {
             </div>
 
             <h1 className="font-display text-4xl sm:text-6xl font-black uppercase tracking-tight text-white mb-6">
-              How <span className="text-amber-400">Roulette.tools</span> Operates
+              How <span className="text-amber-400">Roulette Computer</span> Operates
             </h1>
 
             <p className="mx-auto max-w-3xl text-base sm:text-lg text-slate-400 leading-relaxed">
@@ -148,3 +148,4 @@ export default function HowItWorksPage() {
     </div>
   );
 }
+

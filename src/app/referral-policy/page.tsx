@@ -45,7 +45,7 @@ export default function ReferralPolicyPage() {
                 1. Program Structure & Roles
               </h2>
               <p>
-                The Roulette.tools referral system operates under strict role-based authorization:
+                The Roulette Computer referral system operates under strict role-based authorization:
               </p>
               <ul className="list-disc pl-5 space-y-1.5 text-slate-400">
                 <li><strong className="text-slate-200">Moderator Partners:</strong> Authorized community managers and affiliate creators who have received the <code>MODERATOR</code> role from a Main Admin. They earn a 50% commission on every valid subscription purchased through their referral link.</li>
@@ -59,7 +59,7 @@ export default function ReferralPolicyPage() {
                 2. Strict Zero-Withdrawal Platform Architecture
               </h2>
               <p>
-                Roulette.tools does not hold user balances or provide automated client withdrawal endpoints. There is no in-app custodial wallet or withdrawal request button. Commission statements and arrangements are managed offline directly between designated Main Admins and verified Moderators.
+                Roulette Computer does not hold user balances or provide automated client withdrawal endpoints. There is no in-app custodial wallet or withdrawal request button. Commission statements and arrangements are managed offline directly between designated Main Admins and verified Moderators.
               </p>
             </section>
 
@@ -96,3 +96,4 @@ export default function ReferralPolicyPage() {
     </div>
   );
 }
+

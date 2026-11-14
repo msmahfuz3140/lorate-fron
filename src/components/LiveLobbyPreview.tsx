@@ -144,8 +144,8 @@ export function LiveLobbyPreview() {
               </h3>
               <p className="mt-1 max-w-2xl font-body text-xs leading-relaxed text-slate-400">
                 Sign in with an active plan to load real tables from the provider
-                API, including the Wheel / Prediction Map, Travel Chart, and Live
-                Graph. If the API feed is stale, the last valid data is retained
+                API, including the Wheel / Prediction Map, live W/L history,
+                Pattern Guide, and Live Graph. If the API feed is stale, the last valid data is retained
                 and clearly marked — nothing is invented.
               </p>
             </div>

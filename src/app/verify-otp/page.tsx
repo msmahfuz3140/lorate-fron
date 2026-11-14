@@ -123,13 +123,13 @@ function VerifyOtpContent() {
           <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full p-0.5 bg-gradient-to-br from-amber-400 via-amber-600 to-amber-950 shadow-[0_0_25px_rgba(245,158,11,0.4)] transition-transform group-hover:scale-105">
             <img
               src="/logo.png"
-              alt="Roulette.tools Official Logo"
+              alt="Roulette Computer Official Logo"
               className="h-full w-full rounded-full object-cover"
             />
           </div>
           <div className="text-left">
             <span className="font-display text-lg font-black tracking-wider text-white">
-              ROULETTE<span className="text-amber-400">.TOOLS</span>
+              ROULETTE <span className="text-amber-400">COMPUTER</span>
             </span>
             <p className="font-display text-[10px] uppercase tracking-widest text-slate-500">
               European Roulette Intelligence
@@ -257,3 +257,4 @@ export default function VerifyOtpPage() {
     </Suspense>
   );
 }
+

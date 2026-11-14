@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * ROULETTE.TOOLS — DIRECT BETTING SITE OVERLAY WIDGET
+ * ROULETTE COMPUTER — DIRECT BETTING SITE OVERLAY WIDGET
  * ============================================================================
  * Injects a floating Messenger bubble & live prediction drawer directly on top
  * of any online roulette or betting site (Stake, Bet365, Evolution, Roobet, etc.)
@@ -283,7 +283,7 @@
         <div id="header-left">
           <img id="header-logo" src="${LOGO_URL}" alt="Logo" />
           <div>
-            <div id="header-title">ROULETTE<span>.TOOLS</span></div>
+            <div id="header-title">ROULETTE <span>COMPUTER</span></div>
             <div id="header-sub"><i></i> LIVE BETTING OVERLAY</div>
           </div>
         </div>
@@ -404,6 +404,6 @@
   bubble.addEventListener('pointerdown', onPointerDown);
   bubble.addEventListener('touchstart', onPointerDown, { passive: true });
 
-  console.log('Roulette.tools Betting Site Overlay successfully loaded.');
+  console.log('ROULETTE COMPUTER Betting Site Overlay successfully loaded.');
 })();
 

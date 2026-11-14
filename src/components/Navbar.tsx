@@ -24,6 +24,7 @@ import {
   Bell
 } from 'lucide-react';
 import { PremiumLockModal } from './PremiumLockModal';
+import { useDisclaimer } from '../context/DisclaimerContext';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../context/AuthContext';
 import { useToolWidget } from '../context/ToolWidgetContext';
@@ -38,6 +39,7 @@ export function Navbar() {
   const [headerHeight, setHeaderHeight] = useState(56);
   const { user, isAuthenticated, logout } = useAuth();
   const { openToolWidget } = useToolWidget();
+  const { requestToolAccess } = useDisclaimer();
 
   const headerRef = useRef<HTMLElement>(null);
   const userDropdownRef = useRef<HTMLDivElement>(null);
@@ -153,14 +155,14 @@ export function Navbar() {
               <div className="relative flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full p-0.5 bg-gradient-to-br from-amber-400 via-amber-600 to-amber-950 shadow-[0_0_15px_rgba(245,158,11,0.35)] group-hover:shadow-[0_0_25px_rgba(245,158,11,0.65)] group-hover:scale-105 transition-all duration-300">
                 <img
                   src="/logo.png"
-                  alt="Roulette.tools Official Emblem"
+                  alt="Roulette Computer Official Emblem"
                   className="h-full w-full rounded-full object-cover"
                 />
               </div>
               <div className="flex flex-col min-w-0">
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <span className="font-display text-xs sm:text-sm md:text-base font-black tracking-wider text-white whitespace-nowrap">
-                    ROULETTE<span className="text-amber-400">.TOOLS</span>
+                    ROULETTE <span className="text-amber-400">COMPUTER</span>
                   </span>
                   <span className="hidden sm:inline-block rounded-full bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 px-1.5 py-0.5 font-display text-[8px] font-black uppercase tracking-widest text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.25)] shrink-0">
                     VIP PRO
@@ -199,7 +201,7 @@ export function Navbar() {
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* Quick Mobile Tool Button (< 640px) */}
             <button
-              onClick={handleOpenTool}
+              onClick={() => requestToolAccess(handleOpenTool)}
               className="flex sm:hidden items-center gap-1 rounded-lg border border-emerald-500/50 bg-gradient-to-r from-emerald-500/20 via-emerald-600/15 to-teal-500/20 px-2 py-1 font-display text-[10px] font-black uppercase tracking-wider text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.25)] active:scale-95 shrink-0 whitespace-nowrap"
             >
               <Terminal className="h-3 w-3 text-emerald-400 shrink-0" />
@@ -208,7 +210,7 @@ export function Navbar() {
 
             {/* Desktop / Tablet Tool Launcher Button (>= 640px) */}
             <button
-              onClick={handleOpenTool}
+              onClick={() => requestToolAccess(handleOpenTool)}
               className="hidden sm:flex group relative items-center gap-2 rounded-xl border border-emerald-500/40 bg-gradient-to-r from-emerald-500/20 via-emerald-600/10 to-teal-500/20 px-3 py-1.5 md:px-3.5 md:py-2 font-display text-xs font-black uppercase tracking-wider text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.25)] transition-all hover:scale-[1.03] hover:border-emerald-400 hover:text-emerald-200 hover:shadow-[0_0_25px_rgba(16,185,129,0.4)] active:scale-95 shrink-0 whitespace-nowrap"
             >
               <span className="relative flex h-2 w-2">
@@ -315,7 +317,7 @@ export function Navbar() {
                       <div className="space-y-0.5 py-1">
                         <button
                           type="button"
-                          onClick={handleOpenTool}
+                          onClick={() => requestToolAccess(handleOpenTool)}
                           className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-left font-display text-xs font-bold text-emerald-300 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all cursor-pointer"
                         >
                           <div className="flex items-center gap-2.5">
@@ -327,17 +329,19 @@ export function Navbar() {
 
                         <button
                           type="button"
-                          onClick={() => {
-                            setUserDropdownOpen(false);
-                            setMobileMenuOpen(false);
-                            if (user?.hasActiveSubscription || user?.role === 'SUPER_ADMIN' || user?.role === 'MODERATOR') {
-                              openToolWidget();
-                            } else if (!isAuthenticated) {
-                              router.push('/golin?redirect=/dashboard/tool');
-                            } else {
-                              setLockModalOpen(true);
-                            }
-                          }}
+                          onClick={() =>
+                            requestToolAccess(() => {
+                              setUserDropdownOpen(false);
+                              setMobileMenuOpen(false);
+                              if (user?.hasActiveSubscription || user?.role === 'SUPER_ADMIN' || user?.role === 'MODERATOR') {
+                                openToolWidget();
+                              } else if (!isAuthenticated) {
+                                router.push('/golin?redirect=/dashboard/tool');
+                              } else {
+                                setLockModalOpen(true);
+                              }
+                            })
+                          }
                           className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-left font-display text-xs font-bold text-amber-300 hover:bg-amber-500/10 border border-amber-500/20 transition-all cursor-pointer"
                         >
                           <div className="flex items-center gap-2.5">
@@ -665,3 +669,4 @@ export function Navbar() {
     </>
   );
 }
+

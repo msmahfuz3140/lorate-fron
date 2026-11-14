@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToolWidget } from '../context/ToolWidgetContext';
+import { useDisclaimer } from '../context/DisclaimerContext';
 import { RouletteEngineTool } from './tool/RouletteEngineTool';
 import {
   Minus,
@@ -21,7 +22,8 @@ import {
   Bookmark,
   Layers,
   HelpCircle,
-  Smartphone
+  Smartphone,
+  Globe2
 } from 'lucide-react';
 
 export function FloatingPredictionWidget() {
@@ -38,7 +40,10 @@ export function FloatingPredictionWidget() {
     setToolMode,
     updatePredictionData,
     popoutToolWindow,
+    openBettingOverlay,
+    bettingOverlayUrl,
   } = useToolWidget();
+  const { requestToolAccess } = useDisclaimer();
 
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [hasNewPrediction, setHasNewPrediction] = useState(false);
@@ -91,7 +96,7 @@ export function FloatingPredictionWidget() {
         header.innerHTML = `
           <div style="display:flex;align-items:center;gap:8px;">
             <img src="/logo.png" style="width:24px;height:24px;border-radius:50%;object-fit:cover;" />
-            <span style="font-size:12px;font-weight:900;letter-spacing:0.04em;">ROULETTE<span style="color:#f5b301">.TOOLS</span></span>
+            <span style="font-size:12px;font-weight:900;letter-spacing:0.04em;">ROULETTE <span style="color:#f5b301">COMPUTER</span></span>
             <span style="font-size:9px;color:#22c55e;font-weight:700;background:rgba(34,197,94,0.15);padding:1px 6px;border-radius:999px;">● ALWAYS ON TOP</span>
           </div>
           <div style="display:flex;gap:6px;">
@@ -197,7 +202,7 @@ export function FloatingPredictionWidget() {
           <div className="relative group">
             <button
               type="button"
-              onClick={openToolWidget}
+              onClick={() => requestToolAccess(openToolWidget)}
               className="relative flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-full bg-[#070b14] p-1 shadow-[0_12px_40px_rgba(0,0,0,0.9)] border-2 border-amber-500/90 hover:border-amber-400 active:scale-95 focus:outline-none transition-all cursor-pointer"
               title="Roulette Live Prediction Engine (Click to open floating drawer)"
             >
@@ -208,7 +213,7 @@ export function FloatingPredictionWidget() {
               <div className="relative h-full w-full rounded-full overflow-hidden bg-black p-0.5 flex items-center justify-center border border-white/10">
                 <img
                   src="/logo.png"
-                  alt="Roulette.tools"
+                  alt="Roulette Computer"
                   className="h-full w-full object-cover rounded-full"
                 />
               </div>
@@ -274,7 +279,7 @@ export function FloatingPredictionWidget() {
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="font-display text-xs sm:text-sm font-black tracking-wider text-white truncate">
-                  ROULETTE<span className="text-amber-400">.TOOLS</span>
+                  ROULETTE <span className="text-amber-400">COMPUTER</span>
                 </span>
                 <span
                   className={`flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.2 text-[9px] font-mono font-bold ${
@@ -400,26 +405,44 @@ export function FloatingPredictionWidget() {
             <div className="rounded-2xl border border-teal-500/30 bg-teal-500/10 p-4 space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="font-display text-xs font-bold uppercase text-teal-300 flex items-center gap-1.5">
-                  <ExternalLink className="h-3.5 w-3.5 text-teal-400" />
-                  Method 1: Always-On-Top Floating Window (PC)
+                  <Globe2 className="h-3.5 w-3.5 text-teal-400" />
+                  Method 1: Persistent Betting-Site Overlay
                 </span>
                 <span className="text-[10px] bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded-full font-bold">
-                  Instant
+                  Persistent
                 </span>
               </div>
               <p className="text-[11px] text-slate-300">
-                Creates an OS-level mini floating window that hovers over other browser tabs and casino windows automatically.
+                Opens a resizable, draggable betting-site overlay that stays
+                mounted while you move between dashboard tabs. Its iframe is not
+                recreated or reloaded on tab navigation.
               </p>
+              {bettingOverlayUrl && (
+                <p className="truncate rounded-lg border border-white/10 bg-black/30 px-2 py-1 font-mono text-[9px] text-slate-400">
+                  {bettingOverlayUrl}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowOverlayGuide(false);
+                  openBettingOverlay();
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-teal-500 hover:bg-teal-400 py-2.5 font-display text-xs font-black uppercase tracking-wider text-black transition-all shadow-md cursor-pointer"
+              >
+                <Globe2 className="h-3.5 w-3.5" />
+                Open Persistent Overlay
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   setShowOverlayGuide(false);
                   launchAlwaysOnTopPiP();
                 }}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-teal-500 hover:bg-teal-400 py-2.5 font-display text-xs font-black uppercase tracking-wider text-black transition-all shadow-md cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-2 font-display text-[10px] font-bold uppercase tracking-wider text-slate-300 hover:bg-white/10"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
-                Launch Floating Window Now
+                Also open always-on-top tool window
               </button>
             </div>
 
@@ -481,3 +504,4 @@ export function FloatingPredictionWidget() {
     </>
   );
 }
+

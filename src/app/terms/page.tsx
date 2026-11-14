@@ -36,7 +36,7 @@ export default function TermsPage() {
                 Critical Gambling Risk & Prediction Disclaimer
               </div>
               <p className="text-xs leading-relaxed text-red-300/90">
-                Roulette.tools provides algorithmic, statistical pattern recognition software for European single-zero roulette wheels. We do NOT provide gambling advice, financial guarantees, or promises of monetary returns. European Roulette remains a probabilistic casino game with an inherent house edge (2.70%). You assume sole financial responsibility for any wagers you place with external third-party casino operators.
+                Roulette Computer provides algorithmic, statistical pattern recognition software for European single-zero roulette wheels. We do NOT provide gambling advice, financial guarantees, or promises of monetary returns. European Roulette remains a probabilistic casino game with an inherent house edge (2.70%). You assume sole financial responsibility for any wagers you place with external third-party casino operators.
               </p>
             </div>
 
@@ -45,7 +45,7 @@ export default function TermsPage() {
                 1. Nature of the Software as a Service (SaaS)
               </h2>
               <p>
-                Roulette.tools is purely a specialized information and analytical tool. The platform does not operate a casino, accept gaming bets, or hold player deposits. All live wheel telemetry is captured via public streaming interfaces from recognized software providers (including Evolution Gaming and Pragmatic Play) for real-time mathematical analysis.
+                Roulette Computer is purely a specialized information and analytical tool. The platform does not operate a casino, accept gaming bets, or hold player deposits. All live wheel telemetry is captured via public streaming interfaces from recognized software providers (including Evolution Gaming and Pragmatic Play) for real-time mathematical analysis.
               </p>
             </section>
 
@@ -72,7 +72,7 @@ export default function TermsPage() {
                 4. Strict No-Custody & Zero-Withdrawal Boundary
               </h2>
               <p>
-                Roulette.tools has no wallet custody, balance storage, or client fund withdrawal mechanisms. Any attempt to use the platform for money transmission, currency laundering, or financial intermediation is strictly prohibited and grounds for immediate account termination.
+                Roulette Computer has no wallet custody, balance storage, or client fund withdrawal mechanisms. Any attempt to use the platform for money transmission, currency laundering, or financial intermediation is strictly prohibited and grounds for immediate account termination.
               </p>
             </section>
 
@@ -81,7 +81,7 @@ export default function TermsPage() {
                 5. Intellectual Property & Reverse Engineering
               </h2>
               <p>
-                All mathematical algorithms, wheel telemetry models, pocket distance tracking heuristics, user interface code, and brand trademarks belong exclusively to Roulette.tools. You may not reverse-engineer, scrape, redistribute, or resell prediction streams without prior written authorization.
+                All mathematical algorithms, wheel telemetry models, pocket distance tracking heuristics, user interface code, and brand trademarks belong exclusively to Roulette Computer. You may not reverse-engineer, scrape, redistribute, or resell prediction streams without prior written authorization.
               </p>
             </section>
 
@@ -90,7 +90,7 @@ export default function TermsPage() {
                 6. Limitation of Liability
               </h2>
               <p>
-                Under no circumstances shall Roulette.tools, its operators, or technical contributors be liable for any direct, indirect, incidental, or consequential losses, including but not limited to casino bankroll losses, missed opportunities, or server interruption downtime.
+                Under no circumstances shall Roulette Computer, its operators, or technical contributors be liable for any direct, indirect, incidental, or consequential losses, including but not limited to casino bankroll losses, missed opportunities, or server interruption downtime.
               </p>
             </section>
           </div>
@@ -109,3 +109,4 @@ export default function TermsPage() {
     </div>
   );
 }
+

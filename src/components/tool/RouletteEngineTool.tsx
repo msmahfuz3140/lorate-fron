@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowRightLeft,
   ChevronDown,
+  Globe2,
   Info,
   Layers,
   Radio,
@@ -22,27 +23,32 @@ import { useToolWidget } from '../../context/ToolWidgetContext';
 import {
   Direction,
   NormalizedPrediction,
+  NormalizedRhythm,
   NormalizedTravelChart,
+  computeTravelChart,
   dsp,
   getNumberColor,
   normalizeDirection,
   normalizePrediction,
+  normalizeRhythm,
   normalizeSpins,
   normalizeTravelChart,
   pct,
   r1,
+  rhythmFromTableRow,
   unwrapPayload
 } from '../../lib/roulette-engine';
 import { PredictionWheel } from './PredictionWheel';
-import { TravelChart } from './TravelChart';
+import { PatternGuide } from './PatternGuide';
 import { LiveGraphChart } from './LiveGraphChart';
 import { RacetrackOval } from './RacetrackOval';
+import { WlHistoryRows } from './WlHistoryRows';
 
 export interface RouletteEngineToolProps {
   compact?: boolean;
 }
 
-type ViewMode = 'racetrack' | 'wheel' | 'livegraph' | 'travel';
+type ViewMode = 'racetrack' | 'wheel' | 'livegraph' | 'pattern';
 type ToolStatus = 'idle' | 'loading' | 'live' | 'stale' | 'error' | 'unconfigured' | 'auth';
 
 interface DsTableRow {
@@ -60,6 +66,12 @@ interface DsTableRow {
   wl_last_10?: string[];
   pattern?: any;
   updated_at?: string;
+  rhythm?: any;
+  rhythm_rate?: number;
+  rhythm_percent?: number;
+  rhythm_status?: string;
+  rhythm_hits?: number;
+  rhythm_total?: number;
 }
 
 interface ApiErrorShape {
@@ -173,7 +185,7 @@ function deriveSpins(
 
 export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps) {
   const { user, isLoading: authLoading } = useAuth();
-  const { updatePredictionData } = useToolWidget();
+  const { updatePredictionData, openBettingOverlay } = useToolWidget();
   const isAdmin = user?.role === 'SUPER_ADMIN';
 
   const [tables, setTables] = useState<DsTableRow[]>([]);
@@ -186,6 +198,12 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
   const [rawAnalysis, setRawAnalysis] = useState<any>(null);
   const [prediction, setPrediction] = useState<NormalizedPrediction | null>(null);
   const [travel, setTravel] = useState<NormalizedTravelChart | null>(null);
+  const [rhythm, setRhythm] = useState<NormalizedRhythm | null>(null);
+  const [rhythmCache, setRhythmCache] = useState<Record<string, NormalizedRhythm>>({});
+  const [rhythmLoading, setRhythmLoading] = useState(false);
+  const [rhythmError, setRhythmError] = useState<string | null>(null);
+  const [sortByRhythm, setSortByRhythm] = useState(false);
+  const [tableSearch, setTableSearch] = useState('');
 
   const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
   const [feedInfo, setFeedInfo] = useState<any>(null);
@@ -202,6 +220,9 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
   const inflightKeysRef = useRef<Set<string>>(new Set());
   const hasDataRef = useRef(false);
   const rateLimitedUntilRef = useRef(0);
+  const rhythmSeqRef = useRef(0);
+  const rhythmCacheRef = useRef<Record<string, NormalizedRhythm>>({});
+  const rhythmFetchedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     mountedRef.current = true;
@@ -215,6 +236,36 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
     () => tables.find((table) => table.id === currentTableId),
     [tables, currentTableId]
   );
+
+  const rhythmForTable = useCallback(
+    (table: DsTableRow): NormalizedRhythm | null => {
+      return rhythmCache[table.id] || rhythmFromTableRow(table);
+    },
+    [rhythmCache]
+  );
+
+  const visibleTables = useMemo(() => {
+    const search = tableSearch.trim().toLowerCase();
+    const filtered = tables.filter((table) => {
+      if (table.id === currentTableId) return true;
+      if (!search) return true;
+      return [table.name, table.dealer, table.provider, table.id]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(search));
+    });
+
+    if (!sortByRhythm) return filtered;
+    return [...filtered].sort((a, b) => {
+      const aPercent = rhythmForTable(a)?.percent;
+      const bPercent = rhythmForTable(b)?.percent;
+      const aValue = typeof aPercent === 'number' ? aPercent : -1;
+      const bValue = typeof bPercent === 'number' ? bPercent : -1;
+      if (bValue !== aValue) return bValue - aValue;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+  }, [tables, tableSearch, sortByRhythm, rhythmForTable, currentTableId]);
+
+  const currentRhythm = rhythm || (currentTable ? rhythmFromTableRow(currentTable) : null);
 
   /* ----------------------------------------------------------------------
    * Configuration + table list
@@ -251,6 +302,25 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
       setTables(rows);
       setFeedInfo(payload.feed || null);
       setIsConfigured(true);
+
+      // The table-list API may include rhythm fields. Reuse them immediately
+      // for every game row instead of firing one rhythm request per table.
+      const inlineRhythms: Record<string, NormalizedRhythm> = {};
+      for (const row of rows) {
+        const inline = rhythmFromTableRow(row);
+        const previous = rhythmCacheRef.current[row.id];
+        if (
+          inline &&
+          inline.percent !== null &&
+          (!previous || inline.flags.length >= previous.flags.length)
+        ) {
+          inlineRhythms[row.id] = inline;
+        }
+      }
+      if (Object.keys(inlineRhythms).length > 0) {
+        rhythmCacheRef.current = { ...rhythmCacheRef.current, ...inlineRhythms };
+        setRhythmCache((previous) => ({ ...previous, ...inlineRhythms }));
+      }
 
       if (rows.length === 0) {
         setToolStatus('live');
@@ -328,6 +398,30 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
           ? normalizeTravelChart(payload.travel_chart || payload, currentDirection)
           : null;
 
+        // Newer API versions also include top-level rhythm in prediction.
+        // Reuse it immediately when present.
+        const rhythmBlock =
+          payload.rhythm ||
+          payload.travel_chart?.rhythm ||
+          payload.backtest?.rhythm;
+        if (rhythmBlock) {
+          const predictionRhythm = normalizeRhythm(rhythmBlock, currentTableId);
+          if (predictionRhythm) {
+            rhythmCacheRef.current = {
+              ...rhythmCacheRef.current,
+              [currentTableId]: predictionRhythm
+            };
+            setRhythmCache((previous) => ({
+              ...previous,
+              [currentTableId]: predictionRhythm
+            }));
+            setRhythm(predictionRhythm);
+            if (predictionRhythm.flags.length > 0) {
+              rhythmFetchedRef.current.add(currentTableId);
+            }
+          }
+        }
+
         setRawAnalysis(payload);
         setPrediction(normalizedPrediction);
         // If the API omits travel points, the chart components will rebuild a
@@ -400,6 +494,72 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
     [currentTableId, currentDirection, currentWindow, updatePredictionData]
   );
 
+  /**
+   * Dealer Rhythm is direction-independent. Load it once per table and reuse
+   * the cached value across CW/CCW switches and prediction polls.
+   */
+  const fetchRhythm = useCallback(
+    async (tableId: string, force = false) => {
+      if (!tableId) return;
+
+      const cached = rhythmCacheRef.current[tableId];
+      if (cached) setRhythm(cached);
+      setRhythmError(null);
+
+      if (!force) {
+        if (
+          cached &&
+          cached.percent !== null &&
+          cached.flags.length > 0
+        ) {
+          setRhythmLoading(false);
+          return;
+        }
+
+        if (rhythmFetchedRef.current.has(tableId)) {
+          setRhythmLoading(false);
+          return;
+        }
+      }
+
+      rhythmFetchedRef.current.add(tableId);
+      const sequence = ++rhythmSeqRef.current;
+      if (!cached) setRhythmLoading(true);
+
+      try {
+        const raw = await authClient.getDsTableRhythm(tableId);
+        if (!mountedRef.current || sequence !== rhythmSeqRef.current) return;
+        const payload = unwrapPayload<any>(raw);
+        const normalized = normalizeRhythm(payload, tableId);
+        if (!normalized) {
+          throw Object.assign(new Error('Rhythm response did not contain valid fields.'), {
+            code: 'DS_INVALID_RESPONSE'
+          });
+        }
+
+        rhythmCacheRef.current = {
+          ...rhythmCacheRef.current,
+          [tableId]: normalized
+        };
+        setRhythmCache((previous) => ({ ...previous, [tableId]: normalized }));
+        setRhythm(normalized);
+        setRhythmError(null);
+      } catch (err: any) {
+        if (!mountedRef.current || sequence !== rhythmSeqRef.current) return;
+        rhythmFetchedRef.current.delete(tableId);
+        const friendly = friendlyError(err);
+        setRhythmError(friendly.message);
+        // If the table list already supplied a partial rhythm, keep showing it.
+        if (!cached) setRhythm(null);
+      } finally {
+        if (mountedRef.current && sequence === rhythmSeqRef.current) {
+          setRhythmLoading(false);
+        }
+      }
+    },
+    []
+  );
+
   /* Initial configuration + first table load */
   useEffect(() => {
     if (authLoading) return;
@@ -444,6 +604,26 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
     };
   }, [currentTableId, currentDirection, currentWindow, fetchActiveTable]);
 
+  /* Rhythm is fetched once per table, not per direction/window. */
+  useEffect(() => {
+    if (!currentTableId || !user || authLoading) return;
+    const cached = rhythmCacheRef.current[currentTableId];
+    if (cached) setRhythm(cached);
+    else setRhythm(null);
+    void fetchRhythm(currentTableId);
+  }, [currentTableId, user, authLoading, fetchRhythm]);
+
+  /* Rhythm is direction-independent but still refreshes as new spins arrive. */
+  useEffect(() => {
+    if (!currentTableId || !user || authLoading) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState !== 'hidden') {
+        void fetchRhythm(currentTableId, true);
+      }
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [currentTableId, user, authLoading, fetchRhythm]);
+
   /* Table metadata (spins/accuracy) refresh without doubling prediction calls. */
   useEffect(() => {
     if (!currentTableId || isConfigured === false || !user || authLoading) return;
@@ -457,7 +637,11 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
   const handleRefresh = useCallback(() => {
     void loadTables();
     void fetchActiveTable(true);
-  }, [loadTables, fetchActiveTable]);
+    if (currentTableId) {
+      rhythmFetchedRef.current.delete(currentTableId);
+      void fetchRhythm(currentTableId);
+    }
+  }, [loadTables, fetchActiveTable, fetchRhythm, currentTableId]);
 
   const handleToggleDirection = () => {
     const next: Direction = currentDirection === 'CW' ? 'CCW' : 'CW';
@@ -490,6 +674,8 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
     setPrediction(null);
     setTravel(null);
     setRawAnalysis(null);
+    setRhythm(null);
+    setRhythmError(null);
     setIsSwitching(true);
     setStatusMessage('CONNECTING TO TABLE…');
   };
@@ -502,6 +688,14 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
   const fallbackTravel = travel;
   const spinsNewestFirst = deriveSpins(currentTable, travel, prediction);
   const spinsForFallback = useMemo(() => spinsNewestFirst, [spinsNewestFirst]);
+
+  const liveWlRows = useMemo(() => {
+    if (travel?.wlRows?.length) return travel.wlRows;
+    if (spinsForFallback.length > 1) {
+      return computeTravelChart(spinsForFallback, currentDirection, currentWindow)?.wlRows || [];
+    }
+    return [];
+  }, [travel, spinsForFallback, currentDirection, currentWindow]);
 
   const wlOldest: string[] = useMemo(() => {
     const wlChart = rawAnalysis?.wl_chart || rawAnalysis?.backtest?.wl_chart || {};
@@ -521,7 +715,8 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
     return [];
   }, [rawAnalysis, fallbackTravel]);
 
-  const last10 = wlOldest.slice(-10);
+  // The W/L strip must read newest -> oldest from left to right.
+  const last10 = wlOldest.slice(-10).reverse();
   const wCount = last10.filter((value) => value === 'W').length;
   const lCount = last10.filter((value) => value === 'L').length;
 
@@ -603,7 +798,7 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
           <div className="flex items-center gap-2 font-display text-sm font-black uppercase tracking-wider text-white">
             <Radio className="h-4 w-4 text-amber-400" />
             <span>
-              ROULETTE<span className="text-amber-400">.TOOLS</span>
+              ROULETTE <span className="text-amber-400">COMPUTER</span>
             </span>
           </div>
 
@@ -626,24 +821,54 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            value={tableSearch}
+            onChange={(event) => setTableSearch(event.target.value)}
+            placeholder="Search game…"
+            aria-label="Search roulette game"
+            className="w-[130px] rounded-xl border border-white/10 bg-slate-900/90 px-3 py-1.5 text-xs font-semibold text-white placeholder:text-slate-500 focus:border-amber-500 focus:outline-none sm:w-[150px]"
+          />
+
           <select
             value={currentTableId}
             onChange={(event) => handleTableChange(event.target.value)}
-            className="min-w-[180px] rounded-xl border border-white/10 bg-slate-900/90 px-3 py-1.5 text-xs font-semibold text-white focus:border-amber-500 focus:outline-none"
-            aria-label="Select live roulette table"
+            className="min-w-[210px] rounded-xl border border-white/10 bg-slate-900/90 px-3 py-1.5 text-xs font-semibold text-white focus:border-amber-500 focus:outline-none"
+            aria-label="Select live roulette table and rhythm match"
           >
             {tables.length === 0 ? (
               <option value="">{isConfigured === false ? 'API not configured' : 'Loading live tables…'}</option>
             ) : (
-              tables.map((table) => (
-                <option key={table.id} value={table.id}>
-                  {table.name || table.id}
-                  {table.dealer ? ` (${table.dealer})` : ''} —{' '}
-                  {table.spin_count ?? table.spins?.length ?? 0} spins
-                </option>
-              ))
+              visibleTables.map((table) => {
+                const tableRhythm = rhythmForTable(table);
+                const rhythmLabel =
+                  tableRhythm && tableRhythm.ready && tableRhythm.percent !== null
+                    ? `${tableRhythm.percent}% Rhythm Match`
+                    : tableRhythm
+                      ? 'Building Rhythm'
+                      : 'Rhythm —';
+                return (
+                  <option key={table.id} value={table.id}>
+                    {table.name || table.id}
+                    {table.dealer ? ` (${table.dealer})` : ''} — {rhythmLabel}
+                  </option>
+                );
+              })
             )}
           </select>
+
+          <button
+            type="button"
+            onClick={() => setSortByRhythm((value) => !value)}
+            className={`rounded-lg border px-2.5 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors ${
+              sortByRhythm
+                ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+                : 'border-white/10 bg-white/5 text-slate-400 hover:text-white'
+            }`}
+            title="Sort games by Rhythm Match percentage"
+          >
+            Rhythm Sort
+          </button>
 
           <div className="inline-flex gap-1 rounded-xl border border-white/10 bg-black/40 p-1">
             {(
@@ -651,7 +876,7 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
                 ['racetrack', '⬭ Racetrack'],
                 ['wheel', '◯ Wheel'],
                 ['livegraph', '📈 Live Graph'],
-                ['travel', '📊 Travel']
+                ['pattern', '🧩 Pattern Guide']
               ] as Array<[ViewMode, string]>
             ).map(([mode, label]) => (
               <button
@@ -677,6 +902,16 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
             title="Refresh live data"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openBettingOverlay()}
+            className="inline-flex items-center gap-1 rounded-lg border border-teal-500/40 bg-teal-500/10 px-2.5 py-1.5 font-mono text-[10px] font-bold uppercase text-teal-300 hover:bg-teal-500/20"
+            title="Open persistent betting-site overlay"
+          >
+            <Globe2 className="h-3 w-3" />
+            Overlay
           </button>
 
           {isAdmin && (
@@ -867,6 +1102,148 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
             </div>
           </div>
 
+          {/* Dealer Rhythm Match — direction-independent */}
+          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#0b1322] to-[#070b14] p-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <span className="flex items-center gap-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <Activity className="h-3.5 w-3.5 text-teal-400" />
+                Dealer Rhythm Match
+              </span>
+              <span
+                className={`rounded-full border px-2 py-0.5 font-mono text-[9px] font-black uppercase ${
+                  currentRhythm?.classification === 'GOOD'
+                    ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+                    : currentRhythm?.classification === 'WARN'
+                      ? 'border-amber-500/40 bg-amber-500/15 text-amber-300'
+                      : 'border-slate-500/30 bg-slate-500/10 text-slate-400'
+                }`}
+              >
+                {rhythmLoading && !currentRhythm
+                  ? 'Loading'
+                  : currentRhythm?.classification || 'Building'}
+              </span>
+            </div>
+
+            {rhythmLoading && !currentRhythm ? (
+              <div className="flex items-center justify-center gap-2 py-6 font-mono text-[11px] text-slate-400">
+                <RefreshCw className="h-3.5 w-3.5 animate-spin text-teal-400" />
+                Loading official rhythm…
+              </div>
+            ) : !currentRhythm ? (
+              <div className="space-y-2 py-4 text-center">
+                <p className="font-mono text-[11px] text-slate-400">
+                  {rhythmError || 'Rhythm data is unavailable for this table.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (currentTableId) {
+                      rhythmFetchedRef.current.delete(currentTableId);
+                      void fetchRhythm(currentTableId);
+                    }
+                  }}
+                  className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[10px] font-bold uppercase text-slate-300 hover:bg-white/10"
+                >
+                  Retry rhythm
+                </button>
+              </div>
+            ) : !currentRhythm.ready || currentRhythm.percent === null ? (
+              <div className="py-4 text-center">
+                <p className="font-display text-2xl font-black uppercase tracking-tight text-slate-300">
+                  Building
+                </p>
+                <p className="mt-1 font-mono text-[10px] text-slate-500">
+                  {currentRhythm.total}/{currentRhythm.window || 25} jumps evaluated · needs 25 jumps
+                </p>
+                <p className="mt-2 font-mono text-[9px] leading-relaxed text-slate-600">
+                  No percentage is shown until the official API reports a ready rhythm.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-3 space-y-3">
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span
+                        className={`font-mono text-4xl font-black leading-none ${
+                          currentRhythm.percent >= 85
+                            ? 'text-emerald-400'
+                            : currentRhythm.percent >= 70
+                              ? 'text-amber-300'
+                              : 'text-rose-300'
+                        }`}
+                      >
+                        {currentRhythm.percent}%
+                      </span>
+                      <span className="font-mono text-[10px] font-bold uppercase text-slate-400">
+                        Rhythm Match
+                      </span>
+                    </div>
+                    <p className="mt-1 font-mono text-[10px] text-slate-500">
+                      {currentRhythm.hits} hits · {currentRhythm.misses} misses · {currentRhythm.total} total
+                    </p>
+                  </div>
+                  <div className="text-right font-mono text-[10px] text-slate-500">
+                    <p>Band ±{currentRhythm.band}</p>
+                    <p>Window {currentRhythm.window}</p>
+                  </div>
+                </div>
+
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      currentRhythm.percent >= 85
+                        ? 'bg-emerald-500'
+                        : currentRhythm.percent >= 70
+                          ? 'bg-amber-400'
+                          : 'bg-rose-500'
+                    }`}
+                    style={{ width: `${Math.max(0, Math.min(100, currentRhythm.percent))}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between font-mono text-[9px] text-slate-500">
+                  <span>70% guidance minimum</span>
+                  <span>API GOOD ≥ 85%</span>
+                </div>
+
+                <div className="flex items-center gap-1 overflow-x-auto py-0.5">
+                  {[...currentRhythm.last40].reverse().slice(0, 40).map((hit, index) => (
+                    <span
+                      key={`rhythm-${index}`}
+                      title={hit ? 'Rhythm hit' : 'Rhythm miss'}
+                      className={`h-2.5 w-2.5 shrink-0 rounded-[2px] ${
+                        hit ? 'bg-emerald-500/80' : 'bg-rose-500/80'
+                      }`}
+                    />
+                  ))}
+                  {currentRhythm.last40.length === 0 && (
+                    <span className="font-mono text-[9px] text-slate-500">
+                      No rhythm flags returned.
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap justify-between gap-2 border-t border-white/5 pt-2 font-mono text-[9px] text-slate-500">
+                  <span>Best hit run: <b className="text-emerald-300">{currentRhythm.longestHitRun}</b></span>
+                  <span>Worst miss run: <b className="text-rose-300">{currentRhythm.longestMissRun}</b></span>
+                  <span className="text-slate-600">NEW → OLD flags</span>
+                </div>
+
+                <p className="font-mono text-[9px] leading-relaxed text-slate-600">
+                  Official API rhythm is direction-independent. CW/CCW does not
+                  change this value.
+                </p>
+
+                {rhythmError && (
+                  <p className="font-mono text-[9px] text-amber-300/80">
+                    Refresh warning: {rhythmError} — showing the last valid rhythm.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* W/L pattern */}
           <div className="space-y-3 rounded-2xl border border-white/10 bg-[#090e18] p-4 shadow-xl">
             <div className="flex items-center justify-between">
@@ -904,7 +1281,7 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
                 </div>
               ) : (
                 last10.map((result, index) => {
-                  const isNewest = index === last10.length - 1;
+                  const isNewest = index === 0;
                   return (
                     <div
                       key={`${result}-${index}`}
@@ -923,7 +1300,7 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
             </div>
 
             <div className="font-mono text-[10px] text-slate-400">
-              last {last10.length} signals: {wCount}W - {lCount}L. NEW = most recent result.
+              last {last10.length} signals: {wCount}W - {lCount}L. NEW (left) → OLD (right).
             </div>
           </div>
 
@@ -1033,8 +1410,10 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
           </div>
         </div>
 
-        {/* Right column */}
-        <div className="flex flex-col gap-3 lg:col-span-7">
+        {/* Right column. On small screens the Wheel/Chart column comes first
+            so the W/L cards below it are never forced into a cramped 2-column
+            layout. */}
+        <div className="order-first flex flex-col gap-3 lg:order-none lg:col-span-7">
           {/* Winning strip */}
           <div className="flex items-center gap-3 overflow-x-auto rounded-2xl border border-white/10 bg-black/80 p-2.5 px-3 shadow-inner">
             <span className="shrink-0 font-mono text-[10px] font-bold uppercase text-slate-400">
@@ -1076,7 +1455,7 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
               <span className="flex items-center gap-1.5 font-display text-xs font-bold uppercase tracking-wider text-white">
                 <span
                   className={`h-2 w-2 rounded-sm ${
-                    activeView === 'travel'
+                    activeView === 'pattern'
                       ? 'bg-cyan-400'
                       : activeView === 'livegraph'
                         ? 'bg-amber-400'
@@ -1089,7 +1468,7 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
                     ? 'Radial Wheel Prediction Map'
                     : activeView === 'livegraph'
                       ? 'Live Graph · Fixed Yellow Reference'
-                      : 'Travel Chart · W/L n9 + n4'}
+                      : 'Pattern Guide · W/L Structure Reference'}
               </span>
               <div className="flex items-center gap-3 font-mono text-[10px] text-slate-400">
                 {activeView === 'racetrack' && (
@@ -1159,15 +1538,9 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
               </div>
             )}
 
-            {activeView === 'travel' && (
+            {activeView === 'pattern' && (
               <div className="w-full overflow-hidden rounded-xl border border-white/5 bg-[#020408] p-2">
-                <TravelChart
-                  data={travel}
-                  prediction={p}
-                  fallbackSpins={spinsForFallback}
-                  direction={currentDirection}
-                  window={currentWindow}
-                />
+                <PatternGuide />
               </div>
             )}
 
@@ -1180,6 +1553,8 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
               </div>
             )}
           </div>
+
+          <WlHistoryRows rows={liveWlRows} direction={currentDirection} />
 
           {/* Legend / model note */}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -1227,3 +1602,4 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
     </div>
   );
 }
+

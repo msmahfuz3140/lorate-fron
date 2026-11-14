@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import { Sparkles, ArrowRight, ShieldCheck, Zap, Lock, Terminal, Activity } from 'lucide-react';
 import { PremiumLockModal } from './PremiumLockModal';
 import { useAuth } from '../context/AuthContext';
+import { useDisclaimer } from '../context/DisclaimerContext';
 
 export function Hero() {
   const router = useRouter();
   const [lockModalOpen, setLockModalOpen] = useState(false);
   const { user, isAuthenticated } = useAuth();
+  const { requestToolAccess } = useDisclaimer();
 
   const handleOpenTool = () => {
     if (user?.hasActiveSubscription || user?.role === 'SUPER_ADMIN') {
@@ -61,7 +63,7 @@ export function Hero() {
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 mb-10">
                 {/* Primary OPEN TOOL Button with Shimmer */}
                 <button
-                  onClick={handleOpenTool}
+                  onClick={() => requestToolAccess(handleOpenTool)}
                   className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-emerald-400/60 bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-500 px-6 py-3.5 font-display text-xs font-black uppercase tracking-wider text-black shadow-[0_0_30px_rgba(16,185,129,0.4)] transition-all hover:scale-105 hover:shadow-[0_0_40px_rgba(16,185,129,0.55)] active:scale-95"
                 >
                   <Terminal className="h-4 w-4" />

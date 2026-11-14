@@ -20,8 +20,15 @@ interface ToolWidgetContextType {
   toolMode: ToolMode;         // 'iframe' (index.html) or 'api' (future API system)
   predictionData: PredictionData;
   hasAccess: boolean;
+  bettingOverlayOpen: boolean;
+  bettingOverlayUrl: string;
+  bettingOverlayCollapsed: boolean;
 
   // Actions
+  openBettingOverlay: (url?: string) => void;
+  closeBettingOverlay: () => void;
+  toggleBettingOverlayCollapsed: () => void;
+  setBettingOverlayUrl: (url: string) => void;
   openToolWidget: () => void;
   minimizeToolWidget: () => void;
   toggleToolWidget: () => void;
@@ -41,6 +48,9 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
   const [isWidgetActive, setIsWidgetActive] = useState(true);
   const [toolMode, setToolModeState] = useState<ToolMode>('iframe');
   const [hasAccess, setHasAccess] = useState(true);
+  const [bettingOverlayOpen, setBettingOverlayOpen] = useState(false);
+  const [bettingOverlayCollapsed, setBettingOverlayCollapsed] = useState(false);
+  const [bettingOverlayUrl, setBettingOverlayUrlState] = useState('');
   const [predictionData, setPredictionData] = useState<PredictionData>({
     // Empty until the real API returns a table/prediction. No mock numbers or
     // fabricated confidence values are placed in the widget state.
@@ -88,6 +98,9 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
       if (savedMode === 'iframe' || savedMode === 'api') {
         setToolModeState(savedMode);
       }
+
+      const savedBettingUrl = sessionStorage.getItem('sloot_betting_overlay_url');
+      if (savedBettingUrl) setBettingOverlayUrlState(savedBettingUrl);
     } catch {}
 
     // Cross-tab sync listener
@@ -236,6 +249,36 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
     });
   }, [broadcastMessage]);
 
+  const openBettingOverlay = useCallback((url?: string) => {
+    if (url && url.trim()) {
+      const clean = url.trim();
+      setBettingOverlayUrlState(clean);
+      try {
+        sessionStorage.setItem('sloot_betting_overlay_url', clean);
+      } catch {}
+    }
+    setBettingOverlayOpen(true);
+    setBettingOverlayCollapsed(false);
+  }, []);
+
+  const closeBettingOverlay = useCallback(() => {
+    setBettingOverlayOpen(false);
+    setBettingOverlayCollapsed(false);
+  }, []);
+
+  const toggleBettingOverlayCollapsed = useCallback(() => {
+    setBettingOverlayCollapsed((previous) => !previous);
+  }, []);
+
+  const setBettingOverlayUrl = useCallback((url: string) => {
+    const clean = url.trim();
+    setBettingOverlayUrlState(clean);
+    try {
+      if (clean) sessionStorage.setItem('sloot_betting_overlay_url', clean);
+      else sessionStorage.removeItem('sloot_betting_overlay_url');
+    } catch {}
+  }, []);
+
   const popoutToolWindow = useCallback(() => {
     if (typeof window === 'undefined') return;
     const width = 450;
@@ -255,6 +298,13 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
         toolMode,
         predictionData,
         hasAccess,
+        bettingOverlayOpen,
+        bettingOverlayUrl,
+        bettingOverlayCollapsed,
+        openBettingOverlay,
+        closeBettingOverlay,
+        toggleBettingOverlayCollapsed,
+        setBettingOverlayUrl,
         openToolWidget,
         minimizeToolWidget,
         toggleToolWidget,

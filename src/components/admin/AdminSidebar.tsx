@@ -234,14 +234,14 @@ export function AdminSidebar({
             <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full p-0.5 bg-gradient-to-br from-amber-400 via-amber-600 to-amber-950 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
               <img
                 src="/logo.png"
-                alt="Roulette.tools Official Logo"
+                alt="Roulette Computer Official Logo"
                 className="h-full w-full rounded-full object-cover"
               />
             </div>
             {!isCollapsed && (
               <div className="flex flex-col truncate">
                 <span className="text-sm font-bold tracking-tight text-white">
-                  ROULETTE<span className="text-amber-400">.TOOLS</span>
+                  ROULETTE <span className="text-amber-400">COMPUTER</span>
                 </span>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
                   ADMIN CONSOLE
@@ -426,3 +426,4 @@ export function AdminSidebar({
     </>
   );
 }
+

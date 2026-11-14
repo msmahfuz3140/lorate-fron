@@ -80,7 +80,10 @@ export function TravelChart({
     .map((point, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(2)} ${y(point.signed).toFixed(2)}`)
     .join(' ');
 
-  const rows = chart.wlRows.slice(-40);
+  // Display newest first, oldest last: (NEW W/L) ← ← ← (OLD W/L)
+  // The underlying backtest rows stay chronological; only the visual order is
+  // reversed so the newest result is always on the left.
+  const rows = chart.wlRows.slice(-40).reverse();
   const rowWidth = Math.min(18, (X1 - X0) / Math.max(1, rows.length) - 2);
   const rowStep = (X1 - X0) / Math.max(1, rows.length);
 
@@ -311,7 +314,7 @@ export function TravelChart({
           )}
 
           <text x={X1} y={H - 8} textAnchor="end" fontFamily="'JetBrains Mono', monospace" fontSize="8" fill="#3f4c5e">
-            Left = oldest · Right = newest · Latest 40 causal results
+            NEW W/L → → → OLD W/L · latest 40 causal results
           </text>
         </svg>
       </div>

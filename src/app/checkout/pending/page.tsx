@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Navbar } from '../../../components/Navbar';
 import { Footer } from '../../../components/Footer';
 import { authClient, OrderDetails } from '../../../lib/auth-client';
+import { useDisclaimer } from '../../../context/DisclaimerContext';
 import { formatCentsToUsd } from '../../../shared/plans';
 import {
   Clock,
@@ -23,6 +24,7 @@ import {
 function PendingCheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { requestToolAccess } = useDisclaimer();
   const orderId = searchParams.get('orderId');
 
   const [order, setOrder] = useState<OrderDetails | null>(null);
@@ -227,6 +229,10 @@ function PendingCheckoutContent() {
                   <>
                     <Link
                       href="/dashboard/tool"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        requestToolAccess(() => router.push('/dashboard/tool'));
+                      }}
                       className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-emerald-500/50 bg-gradient-to-r from-emerald-500 to-emerald-600 py-3.5 font-display text-xs font-black uppercase tracking-wider text-black shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-95"
                     >
                       <Terminal className="h-4 w-4" />
