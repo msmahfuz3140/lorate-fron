@@ -101,8 +101,8 @@ export function StrategiesShowcase() {
               {/* Visual Demo Box */}
               <div className="rounded-xl border border-white/10 bg-black/50 p-6 space-y-4">
                 <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                  <span className="font-display text-xs font-bold text-slate-400 uppercase tracking-wider">Offset Calculation Demo</span>
-                  <span className="font-display text-xs font-bold text-emerald-400">RECOMMENDED</span>
+                  <span className="font-display text-xs font-bold text-slate-400 uppercase tracking-wider">Offset Output Format (example)</span>
+                  <span className="font-display text-xs font-bold text-slate-400">NOT LIVE DATA</span>
                 </div>
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
                   <p className="font-display text-xs text-slate-400 mb-1">Calculation: Playing (+ and -1)</p>
@@ -151,8 +151,8 @@ export function StrategiesShowcase() {
               {/* Visual Demo Box */}
               <div className="rounded-xl border border-white/10 bg-black/50 p-6 space-y-4">
                 <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                  <span className="font-display text-xs font-bold text-slate-400 uppercase tracking-wider">Streak Pattern Stream</span>
-                  <span className="font-display text-xs font-bold text-rose-400">MOMENTUM: HOT</span>
+                  <span className="font-display text-xs font-bold text-slate-400 uppercase tracking-wider">W/L Stream Format (example)</span>
+                  <span className="font-display text-xs font-bold text-slate-400">NOT LIVE DATA</span>
                 </div>
                 <div className="flex gap-2">
                   {['W', 'W', 'W', 'L', 'W', 'W', 'W', 'L', 'W', 'W'].map((val, idx) => (
@@ -209,7 +209,7 @@ export function StrategiesShowcase() {
               <div className="rounded-xl border border-white/10 bg-black/50 p-6 space-y-4">
                 <div className="flex items-center justify-between border-b border-white/5 pb-3">
                   <span className="font-display text-xs font-bold text-slate-400 uppercase tracking-wider">Travel Line Indicator</span>
-                  <span className="font-display text-xs font-bold text-emerald-400">PHASE: CONSISTENT (88.8%)</span>
+                  <span className="font-display text-xs font-bold text-slate-400">CALCULATED FROM LIVE DATA</span>
                 </div>
                 <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2">
                   <div className="flex justify-between items-center text-xs">
@@ -220,9 +220,9 @@ export function StrategiesShowcase() {
                     <span className="font-display text-slate-400">Recommended Placement:</span>
                     <strong className="font-display text-emerald-400">0 with 4 Neighbours (0n4)</strong>
                   </div>
-                  <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden mt-2">
-                    <div className="h-full bg-gradient-to-r from-emerald-500 to-amber-500 w-[88%]" />
-                  </div>
+                  <p className="mt-2 font-mono text-[9px] text-slate-500">
+                    Live phase, mean and band values are shown only inside the member tool.
+                  </p>
                 </div>
               </div>
             </div>

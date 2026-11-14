@@ -1,458 +1,921 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { authClient } from '../../lib/auth-client';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   Activity,
-  Radio,
-  RefreshCw,
-  Sliders,
-  ChevronDown,
-  Layers,
-  Sparkles,
-  Zap,
-  ShieldCheck,
   AlertTriangle,
   ArrowRightLeft,
-  Info
+  ChevronDown,
+  Info,
+  Layers,
+  Radio,
+  RefreshCw,
+  Settings2,
+  ShieldCheck,
+  Sparkles,
+  Zap
 } from 'lucide-react';
-
-// =============================================================================
-// EUROPEAN ROULETTE WHEEL CONSTANTS & MATH
-// =============================================================================
-const RING = [
-  0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5,
-  24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
-];
-const N = RING.length;
-const POS: Record<number, number> = {};
-RING.forEach((n, i) => {
-  POS[n] = i;
-});
-
-const RED_NUMS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
-const BLACK_NUMS = new Set([2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35]);
-
-function getNumberColor(num: number): 'red' | 'black' | 'green' {
-  if (num === 0) return 'green';
-  return RED_NUMS.has(num) ? 'red' : 'black';
-}
-
-function at(pos: number): number {
-  return RING[((pos % N) + N) % N];
-}
-
-function dsp(n: any): string {
-  if (n === null || n === undefined) return '--';
-  return n === -1 ? '00' : String(n);
-}
-
-function arc(cx: number, cy: number, r1: number, r2: number, a1: number, a2: number): string {
-  const x1 = cx + Math.cos(a1) * r1, y1 = cy + Math.sin(a1) * r1;
-  const x2 = cx + Math.cos(a2) * r1, y2 = cy + Math.sin(a2) * r1;
-  const x3 = cx + Math.cos(a2) * r2, y3 = cy + Math.sin(a2) * r2;
-  const x4 = cx + Math.cos(a1) * r2, y4 = cy + Math.sin(a1) * r2;
-  return `M${x1} ${y1} A${r1} ${r1} 0 0 1 ${x2} ${y2} L${x3} ${y3} A${r2} ${r2} 0 0 0 ${x4} ${y4} Z`;
-}
+import { authClient } from '../../lib/auth-client';
+import { useAuth } from '../../context/AuthContext';
+import { useToolWidget } from '../../context/ToolWidgetContext';
+import {
+  Direction,
+  NormalizedPrediction,
+  NormalizedTravelChart,
+  dsp,
+  getNumberColor,
+  normalizeDirection,
+  normalizePrediction,
+  normalizeSpins,
+  normalizeTravelChart,
+  pct,
+  r1,
+  unwrapPayload
+} from '../../lib/roulette-engine';
+import { PredictionWheel } from './PredictionWheel';
+import { TravelChart } from './TravelChart';
+import { LiveGraphChart } from './LiveGraphChart';
+import { RacetrackOval } from './RacetrackOval';
 
 export interface RouletteEngineToolProps {
   compact?: boolean;
 }
 
+type ViewMode = 'racetrack' | 'wheel' | 'livegraph' | 'travel';
+type ToolStatus = 'idle' | 'loading' | 'live' | 'stale' | 'error' | 'unconfigured' | 'auth';
+
+interface DsTableRow {
+  id: string;
+  name?: string;
+  provider?: string;
+  dealer?: string;
+  spins?: number[];
+  spin_count?: number;
+  ready?: boolean;
+  accuracy_cw?: number;
+  accuracy_ccw?: number;
+  best_accuracy?: number;
+  best_direction?: string;
+  wl_last_10?: string[];
+  pattern?: any;
+  updated_at?: string;
+}
+
+interface ApiErrorShape {
+  code?: string;
+  message: string;
+  status?: number;
+}
+
+// 6s keeps the dashboard responsive while staying friendly to the provider's
+// default 60 requests/minute per-key quota (the backend also dedupes/caches).
+const POLL_MS = 6000;
+const TABLE_POLL_MS = 45000;
+
+function friendlyError(err: any): ApiErrorShape {
+  const code = err?.code || err?.details?.code;
+  const status = err?.status;
+  const rawMessage = err?.message || 'The API request failed.';
+
+  const messages: Record<string, string> = {
+    DS_NOT_CONFIGURED:
+      'The Dealer Signature API is not configured. Ask an administrator to save the Public API URL and Server SK Key in Admin → Settings → API Settings.',
+    DS_INVALID_CONFIG:
+      'The saved API URL or API key is invalid. Update it in Admin → Settings → API Settings.',
+    DS_AUTH_FAILED:
+      'The provider rejected the API key or its permissions. Check the Server SK Key and endpoint permissions.',
+    INVALID_API_KEY: 'The provider rejected the Server SK Key. Save a valid key in API Settings.',
+    SIGNATURE_REQUIRED:
+      'The provider requires signed server requests. The configured key must be a Server SK Key (sk_live_...), not a browser key.',
+    INVALID_SIGNATURE:
+      'The provider rejected the request signature. Check the Server SK Key and server clock.',
+    ENDPOINT_NOT_ALLOWED:
+      'This API key does not have the tables.prediction permission. Enable it in the provider admin panel.',
+    ORIGIN_REQUIRED:
+      'The provider requires an allowed origin. Use a Server SK Key from the backend proxy.',
+    ORIGIN_NOT_ALLOWED:
+      'The provider rejected the server origin. Check the key domain mode or provider settings.',
+    RATE_LIMITED:
+      'The provider rate limit was reached. Automatic polling is paused briefly and then retried; the last valid data is kept.',
+    DS_RATE_LIMITED:
+      'The provider rate limit was reached. Automatic polling is paused briefly and then retried; the last valid data is kept.',
+    FEED_UNAVAILABLE:
+      'The provider live feed is unavailable or stale. Existing data is kept until the feed recovers.',
+    DS_FEED_UNAVAILABLE:
+      'The provider live feed is unavailable or stale. Existing data is kept until the feed recovers.',
+    TABLE_NOT_FOUND:
+      'The selected table is no longer available. Choose another live table.',
+    VALIDATION_FAILED:
+      'The provider rejected the request parameters. The dashboard will retry with the current table and window.',
+    UNPROCESSABLE:
+      'The provider could not analyse the current spin sequence yet.',
+    MAINTENANCE_MODE:
+      'The provider API is in maintenance mode. Existing data is kept while the dashboard retries.',
+    API_DISABLED:
+      'The provider API is temporarily disabled.',
+    IP_NOT_ALLOWED:
+      'The provider API rejected the backend server IP. Add the server IP to the key allowlist.',
+    ACCOUNT_INACTIVE:
+      'The provider account or API key is suspended, expired, or inactive.',
+    DS_UPSTREAM_ERROR:
+      'The provider returned an unexpected server error. A bounded retry was attempted.',
+    DS_PROXY_ERROR:
+      'The backend proxy could not complete the provider request.',
+    DS_API_TIMEOUT:
+      'The provider API timed out. A bounded retry was attempted; the next poll will try again.',
+    DS_NETWORK_ERROR:
+      'The backend could not reach the provider API. Check the API URL and server network access.',
+    DS_INVALID_RESPONSE:
+      'The provider returned an invalid response. No data was rendered from that response.',
+    SUBSCRIPTION_REQUIRED:
+      'An active subscription is required to access the private prediction engine.',
+    SUBSCRIPTION_EXPIRED:
+      'Your subscription has expired. Renew it to restore live predictions.',
+    UNAUTHORIZED:
+      'Your session has expired. Please sign in again.',
+    CLIENT_TIMEOUT: 'The request timed out. The previous valid data is still displayed.'
+  };
+
+  return {
+    code,
+    status,
+    message: messages[code] || rawMessage
+  };
+}
+
+function deriveSpins(
+  table: DsTableRow | undefined,
+  travel: NormalizedTravelChart | null,
+  prediction: NormalizedPrediction | null
+): number[] {
+  const fromTable = normalizeSpins(table?.spins);
+  if (fromTable.length > 0) return fromTable;
+
+  if (travel && travel.points.length > 0) {
+    const fromPoints = [...travel.points]
+      .reverse()
+      .map((point) => point.to)
+      .filter((n): n is number => n !== null);
+    if (fromPoints.length > 0) {
+      if (prediction?.lastSpin !== null && prediction?.lastSpin !== undefined && fromPoints[0] !== prediction.lastSpin) {
+        fromPoints.unshift(prediction.lastSpin);
+      }
+      return fromPoints;
+    }
+  }
+
+  if (prediction?.lastSpin !== null && prediction?.lastSpin !== undefined) {
+    return [prediction.lastSpin];
+  }
+  return [];
+}
+
 export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps) {
-  const [tables, setTables] = useState<any[]>([]);
-  const [currentTableId, setCurrentTableId] = useState<string>('');
-  const [currentDirection, setCurrentDirection] = useState<'CW' | 'CCW'>('CW');
-  const [currentWindow, setCurrentWindow] = useState<number>(25);
-  const [neighborCount, setNeighborCount] = useState<number>(4);
-  const [activeView, setActiveView] = useState<'racetrack' | 'circular' | 'livegraph' | 'travel'>('racetrack');
-  const [predictionData, setPredictionData] = useState<any>(null);
-  const [travelData, setTravelData] = useState<any>(null);
+  const { user, isLoading: authLoading } = useAuth();
+  const { updatePredictionData } = useToolWidget();
+  const isAdmin = user?.role === 'SUPER_ADMIN';
+
+  const [tables, setTables] = useState<DsTableRow[]>([]);
+  const [currentTableId, setCurrentTableId] = useState('');
+  const [currentDirection, setCurrentDirection] = useState<Direction>('CW');
+  const [currentWindow, setCurrentWindow] = useState(25);
+  const [neighborCount, setNeighborCount] = useState(4);
+  const [activeView, setActiveView] = useState<ViewMode>('racetrack');
+
+  const [rawAnalysis, setRawAnalysis] = useState<any>(null);
+  const [prediction, setPrediction] = useState<NormalizedPrediction | null>(null);
+  const [travel, setTravel] = useState<NormalizedTravelChart | null>(null);
+
   const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
-  const [isLive, setIsLive] = useState<boolean>(false);
-  const [statusMessage, setStatusMessage] = useState<string>('CONNECTING...');
-  const [showRawOutput, setShowRawOutput] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [feedInfo, setFeedInfo] = useState<any>(null);
+  const [toolStatus, setToolStatus] = useState<ToolStatus>('loading');
+  const [statusMessage, setStatusMessage] = useState('CONNECTING…');
+  const [errorInfo, setErrorInfo] = useState<ApiErrorShape | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSwitching, setIsSwitching] = useState(false);
+  const [showRawOutput, setShowRawOutput] = useState(false);
 
-  const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const isFetchingRef = useRef<boolean>(false);
+  const mountedRef = useRef(true);
+  const fetchSeqRef = useRef(0);
+  const inflightKeysRef = useRef<Set<string>>(new Set());
+  const hasDataRef = useRef(false);
+  const rateLimitedUntilRef = useRef(0);
 
-  // 1. Initial Configuration Check
-  const checkConfig = useCallback(async () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      fetchSeqRef.current += 1;
+    };
+  }, []);
+
+  const currentTable = useMemo(
+    () => tables.find((table) => table.id === currentTableId),
+    [tables, currentTableId]
+  );
+
+  /* ----------------------------------------------------------------------
+   * Configuration + table list
+   * -------------------------------------------------------------------- */
+  const checkConfiguration = useCallback(async (): Promise<boolean> => {
     try {
       const config = await authClient.getDsConfig();
-      if (config && config.configured) {
-        setIsConfigured(true);
-        return true;
-      } else {
-        setIsConfigured(false);
-        setStatusMessage('UNCONFIGURED');
-        return false;
+      const configured = !!config?.configured;
+      setIsConfigured(configured);
+      if (!configured) {
+        setToolStatus('unconfigured');
+        setStatusMessage('API NOT CONFIGURED');
       }
+      return configured;
     } catch {
-      setIsConfigured(true);
+      // Do not block the table request: it will surface a more useful error.
+      setIsConfigured(null);
       return true;
     }
   }, []);
 
-  // 2. Fetch Live Tables List
-  const fetchTablesList = useCallback(async () => {
+  const loadTables = useCallback(async () => {
     try {
-      const res = await authClient.getDsTables({ limit: 100 });
-      if (res && res.success && res.data && Array.isArray(res.data.tables)) {
-        setTables(res.data.tables);
-        setIsLive(true);
-        setStatusMessage('LIVE');
+      const raw = await authClient.getDsTables({ limit: 200, sort: 'active' });
+      if (!mountedRef.current) return;
+      const payload = unwrapPayload<any>(raw);
+      if (!payload || !Array.isArray(payload.tables)) {
+        throw Object.assign(new Error('The provider response did not contain a valid tables array.'), {
+          code: 'DS_INVALID_RESPONSE'
+        });
+      }
 
-        if (!currentTableId && res.data.tables.length > 0) {
-          setCurrentTableId(res.data.tables[0].id);
+      const rows = payload.tables as DsTableRow[];
+      setTables(rows);
+      setFeedInfo(payload.feed || null);
+      setIsConfigured(true);
+
+      if (rows.length === 0) {
+        setToolStatus('live');
+        setStatusMessage('NO LIVE TABLES');
+      } else {
+        setCurrentTableId((previous) =>
+          previous && rows.some((row) => row.id === previous) ? previous : rows[0].id
+        );
+      }
+    } catch (err: any) {
+      if (!mountedRef.current) return;
+      const friendly = friendlyError(err);
+      setErrorInfo(friendly);
+      if (friendly.code === 'DS_NOT_CONFIGURED' || friendly.code === 'DS_INVALID_CONFIG') {
+        setIsConfigured(false);
+        setToolStatus('unconfigured');
+        setStatusMessage('API NOT CONFIGURED');
+      } else if (friendly.status === 401 || friendly.status === 403) {
+        setToolStatus('auth');
+        setStatusMessage('ACCESS DENIED');
+      } else if (hasDataRef.current || tables.length > 0) {
+        setToolStatus('stale');
+        setStatusMessage('STALE — RETRYING');
+      } else {
+        setToolStatus('error');
+        setStatusMessage('API ERROR');
+      }
+    }
+  }, [tables.length]);
+
+  /* ----------------------------------------------------------------------
+   * Active table prediction (single request; travel chart is embedded)
+   * -------------------------------------------------------------------- */
+  const fetchActiveTable = useCallback(
+    async (force = false) => {
+      if (!currentTableId) return;
+      if (document.visibilityState === 'hidden') return;
+      if (!force && Date.now() < rateLimitedUntilRef.current) return;
+
+      const requestKey = `${currentTableId}|${currentDirection}|${currentWindow}`;
+      if (!force && inflightKeysRef.current.has(requestKey)) return;
+
+      const sequence = ++fetchSeqRef.current;
+      inflightKeysRef.current.add(requestKey);
+      setIsLoading(true);
+
+      try {
+        const raw = await authClient.getDsTablePrediction(
+          currentTableId,
+          currentDirection,
+          currentWindow
+        );
+        if (!mountedRef.current || sequence !== fetchSeqRef.current) return;
+
+        const payload = unwrapPayload<any>(raw);
+        if (!payload || (!payload.prediction && !payload.ready)) {
+          throw Object.assign(new Error('The provider response did not contain a prediction payload.'), {
+            code: 'DS_INVALID_RESPONSE'
+          });
         }
-      } else if (res && res.error && res.error.code === 'DS_NOT_CONFIGURED') {
-        setIsConfigured(false);
-        setStatusMessage('UNCONFIGURED');
+
+        const returnedDirection = normalizeDirection(payload.direction);
+        // Ignore a response that belongs to an older direction/window selection.
+        if (
+          payload.direction !== undefined &&
+          returnedDirection !== currentDirection
+        ) {
+          return;
+        }
+
+        const normalizedPrediction = normalizePrediction(payload);
+        const hasTravelBlock =
+          !!payload.travel_chart || Array.isArray(payload.points);
+        const normalizedTravel = hasTravelBlock
+          ? normalizeTravelChart(payload.travel_chart || payload, currentDirection)
+          : null;
+
+        setRawAnalysis(payload);
+        setPrediction(normalizedPrediction);
+        // If the API omits travel points, the chart components will rebuild a
+        // fallback from the received table spins. Do not pass an empty chart
+        // object that would suppress that deterministic fallback.
+        setTravel(normalizedTravel && normalizedTravel.points.length > 0 ? normalizedTravel : null);
+        setErrorInfo(null);
+        setFeedInfo((previous: any) => payload.feed || previous);
+        setIsConfigured(true);
+        setToolStatus('live');
+        setStatusMessage(
+          normalizedPrediction.ready
+            ? `LIVE · ${returnedDirection}`
+            : `BUILDING · ${normalizedPrediction.spinsNeeded ?? 0} MORE SPINS`
+        );
+        setLastUpdated(
+          new Date().toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          })
+        );
+        hasDataRef.current = true;
+        rateLimitedUntilRef.current = 0;
+
+        updatePredictionData({
+          tableName: payload.table_name || 'Live Roulette',
+          provider: payload.provider,
+          lastNumbers: normalizedPrediction.lastSpin !== null ? [normalizedPrediction.lastSpin] : [],
+          predictedPocket:
+            normalizedPrediction.main !== null ? dsp(normalizedPrediction.main) : undefined,
+          confidence: undefined
+        });
+      } catch (err: any) {
+        if (!mountedRef.current || sequence !== fetchSeqRef.current) return;
+        const friendly = friendlyError(err);
+        setErrorInfo(friendly);
+
+        if (friendly.code === 'RATE_LIMITED' || friendly.code === 'DS_RATE_LIMITED') {
+          // Bounded backoff: wait 15s before the next upstream attempt. The
+          // previous valid prediction remains on screen.
+          rateLimitedUntilRef.current = Date.now() + 15000;
+        }
+
+        if (friendly.code === 'DS_NOT_CONFIGURED' || friendly.code === 'DS_INVALID_CONFIG') {
+          setIsConfigured(false);
+          setToolStatus('unconfigured');
+          setStatusMessage('API NOT CONFIGURED');
+        } else if (friendly.status === 401 || friendly.status === 403) {
+          setToolStatus('auth');
+          setStatusMessage('ACCESS DENIED');
+        } else if (hasDataRef.current) {
+          // Keep the last valid prediction on screen. Never blank a working
+          // chart because a single poll failed.
+          setToolStatus('stale');
+          setStatusMessage('STALE — SHOWING LAST VALID DATA');
+        } else {
+          setToolStatus('error');
+          setStatusMessage('API ERROR');
+        }
+      } finally {
+        inflightKeysRef.current.delete(requestKey);
+        if (mountedRef.current && sequence === fetchSeqRef.current) {
+          setIsLoading(false);
+          setIsSwitching(false);
+        }
       }
-    } catch (err: any) {
-      if (err?.message?.includes('DS_NOT_CONFIGURED')) {
-        setIsConfigured(false);
-        setStatusMessage('UNCONFIGURED');
-      }
-    }
-  }, [currentTableId]);
+    },
+    [currentTableId, currentDirection, currentWindow, updatePredictionData]
+  );
 
-  // 3. Fetch Prediction & Travel Data for Current Table
-  const fetchActiveTableData = useCallback(async (force = false) => {
-    if (!currentTableId) return;
-    if (isFetchingRef.current && !force) return;
-
-    isFetchingRef.current = true;
-    setIsLoading(true);
-
-    try {
-      const [predRes, travelRes] = await Promise.all([
-        authClient.getDsTablePrediction(currentTableId, currentDirection, currentWindow).catch(() => null),
-        authClient.getDsTableTravelChart(currentTableId, currentDirection, currentWindow).catch(() => null)
-      ]);
-
-      if (predRes && predRes.success && predRes.data) {
-        setPredictionData(predRes.data);
-        setIsLive(true);
-        setStatusMessage('LIVE');
-      }
-
-      if (travelRes && travelRes.success && travelRes.data) {
-        setTravelData(travelRes.data);
-      }
-    } catch (err: any) {
-      console.warn('Real-time poll warning:', err);
-    } finally {
-      isFetchingRef.current = false;
-      setIsLoading(false);
-    }
-  }, [currentTableId, currentDirection, currentWindow]);
-
-  // Initial Load
+  /* Initial configuration + first table load */
   useEffect(() => {
-    let mounted = true;
+    if (authLoading) return;
+    if (!user) {
+      setToolStatus('auth');
+      setStatusMessage('SIGN IN REQUIRED');
+      return;
+    }
+
+    let cancelled = false;
     (async () => {
-      await checkConfig();
-      if (mounted) {
-        await fetchTablesList();
-      }
+      const ok = await checkConfiguration();
+      if (cancelled) return;
+      if (ok) await loadTables();
     })();
     return () => {
-      mounted = false;
+      cancelled = true;
     };
-  }, [checkConfig, fetchTablesList]);
+    // Re-run when authentication resolves; the API is never polled anonymously.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user?.id]);
 
-  // When currentTableId changes, fetch immediately
+  /* Active table polling: exactly one interval, cleaned up on unmount. */
   useEffect(() => {
-    if (currentTableId) {
-      fetchActiveTableData(true);
-    }
-  }, [currentTableId, fetchActiveTableData]);
+    if (!currentTableId || !user || authLoading) return;
 
-  // Cyclic real-time auto-refresh without page reload (every 3 seconds)
-  useEffect(() => {
-    if (!currentTableId) return;
+    void fetchActiveTable(true);
+    const timer = setInterval(() => {
+      void fetchActiveTable(false);
+    }, POLL_MS);
 
-    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-
-    pollTimerRef.current = setInterval(() => {
-      fetchActiveTableData(false);
-    }, 3200);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchActiveTable(false);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [currentTableId, fetchActiveTableData]);
+  }, [currentTableId, currentDirection, currentWindow, fetchActiveTable]);
 
-  // Periodic table list poll (every 30 seconds)
+  /* Table metadata (spins/accuracy) refresh without doubling prediction calls. */
   useEffect(() => {
-    const listTimer = setInterval(() => {
-      fetchTablesList();
-    }, 30000);
-    return () => clearInterval(listTimer);
-  }, [fetchTablesList]);
+    if (!currentTableId || isConfigured === false || !user || authLoading) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState !== 'hidden') void loadTables();
+    }, TABLE_POLL_MS);
+    return () => clearInterval(timer);
+  }, [currentTableId, isConfigured, user, authLoading, loadTables]);
 
-  // Toggle Direction (CW <-> CCW) with INSTANT refresh
+  /* Manual refresh */
+  const handleRefresh = useCallback(() => {
+    void loadTables();
+    void fetchActiveTable(true);
+  }, [loadTables, fetchActiveTable]);
+
   const handleToggleDirection = () => {
-    const nextDir = currentDirection === 'CW' ? 'CCW' : 'CW';
-    setCurrentDirection(nextDir);
+    const next: Direction = currentDirection === 'CW' ? 'CCW' : 'CW';
+    // Invalidate any in-flight response immediately so a late CW result can
+    // never overwrite the new CCW selection.
+    fetchSeqRef.current += 1;
+    setCurrentDirection(next);
+    setIsSwitching(true);
+    setStatusMessage(`RECALCULATING ${next}…`);
+    // Remove direction-specific output immediately; the new request is the
+    // single source of truth. No page reload and no frozen controls.
+    setPrediction(null);
+    setTravel(null);
+    setRawAnalysis(null);
   };
 
-  // When direction changes, instantly re-fetch
-  useEffect(() => {
-    if (currentTableId) {
-      fetchActiveTableData(true);
-    }
-  }, [currentDirection, fetchActiveTableData]);
-
-  // Sample Window Adjust
   const handleAdjustWindow = (delta: number) => {
-    const nextWin = Math.max(10, Math.min(100, currentWindow + delta));
-    setCurrentWindow(nextWin);
+    fetchSeqRef.current += 1;
+    setCurrentWindow((previous) => Math.max(10, Math.min(100, previous + delta)));
+    setIsSwitching(true);
+    setStatusMessage('RECALCULATING WINDOW…');
+    setPrediction(null);
+    setTravel(null);
+    setRawAnalysis(null);
   };
 
-  // Helper variables from predictionData
-  const p = predictionData?.prediction || {};
-  const s = predictionData?.statistics || {};
-  const b = predictionData?.backtest || {};
-  const pat = predictionData?.pattern || (predictionData?.structures?.selected) || {};
-  const wlChart = predictionData?.wl_chart || b?.wl_chart || {};
+  const handleTableChange = (tableId: string) => {
+    fetchSeqRef.current += 1;
+    setCurrentTableId(tableId);
+    setPrediction(null);
+    setTravel(null);
+    setRawAnalysis(null);
+    setIsSwitching(true);
+    setStatusMessage('CONNECTING TO TABLE…');
+  };
 
-  // W/L List (oldest_first to show LEFT TO RIGHT chronologically)
-  const n9List: string[] = wlChart.oldest_first || (wlChart.n9 ? [...wlChart.n9].reverse() : []);
-  const wCount = n9List.filter((x) => x === 'W').length;
-  const lCount = n9List.filter((x) => x === 'L').length;
+  /* ----------------------------------------------------------------------
+   * Derived display values
+   * -------------------------------------------------------------------- */
+  const statistics = rawAnalysis?.statistics || {};
+  const pattern = rawAnalysis?.pattern || rawAnalysis?.structures?.selected || {};
+  const fallbackTravel = travel;
+  const spinsNewestFirst = deriveSpins(currentTable, travel, prediction);
+  const spinsForFallback = useMemo(() => spinsNewestFirst, [spinsNewestFirst]);
 
-  const winRate = s.n9_accuracy !== undefined ? (s.n9_accuracy * 100).toFixed(1) : '0.0';
-  const lastSpin = p.last_spin;
-  const spinsHistory: number[] = predictionData?.spins || travelData?.spins_history || [];
+  const wlOldest: string[] = useMemo(() => {
+    const wlChart = rawAnalysis?.wl_chart || rawAnalysis?.backtest?.wl_chart || {};
+    if (Array.isArray(wlChart?.oldest_first)) {
+      return wlChart.oldest_first.filter((v: any) => v === 'W' || v === 'L');
+    }
+    if (Array.isArray(wlChart?.n9)) {
+      return [...wlChart.n9]
+        .reverse()
+        .filter((v: any) => v === 'W' || v === 'L');
+    }
+    if (fallbackTravel?.wlRows?.length) {
+      return fallbackTravel.wlRows
+        .map((row) => row.n9)
+        .filter((v): v is 'W' | 'L' => v === 'W' || v === 'L');
+    }
+    return [];
+  }, [rawAnalysis, fallbackTravel]);
+
+  const last10 = wlOldest.slice(-10);
+  const wCount = last10.filter((value) => value === 'W').length;
+  const lCount = last10.filter((value) => value === 'L').length;
+
+  const n9Accuracy =
+    typeof statistics.n9_accuracy === 'number'
+      ? statistics.n9_accuracy
+      : fallbackTravel?.summary.n9Accuracy ?? null;
+  const n4Accuracy =
+    typeof statistics.n4_accuracy === 'number'
+      ? statistics.n4_accuracy
+      : fallbackTravel?.summary.n4Accuracy ?? null;
+  const n9Predictions = statistics.predictions ?? fallbackTravel?.summary.predictions ?? 0;
+  const n4Predictions = statistics.n4_predictions ?? fallbackTravel?.summary.n4Predictions ?? 0;
+
+  const p = prediction;
+  const ready = !!p?.ready;
+  const topOver = p?.overCenter ?? null;
+  const topUnder = p?.underCenter ?? null;
+
+  const statusClass =
+    toolStatus === 'live'
+      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+      : toolStatus === 'stale'
+        ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+        : toolStatus === 'unconfigured'
+          ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+          : toolStatus === 'auth'
+            ? 'border-rose-500/40 bg-rose-500/10 text-rose-400'
+            : toolStatus === 'error'
+              ? 'border-rose-500/40 bg-rose-500/10 text-rose-400'
+              : 'border-slate-500/40 bg-slate-500/10 text-slate-300';
+
+  if (authLoading) {
+    return (
+      <div className={`flex min-h-[240px] flex-col items-center justify-center gap-3 text-slate-300 ${compact ? 'p-4' : 'p-8'}`}>
+        <RefreshCw className="h-5 w-5 animate-spin text-amber-400" />
+        <span className="font-mono text-xs uppercase tracking-widest">Checking secure session…</span>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className={`flex min-h-[260px] flex-col items-center justify-center gap-4 rounded-2xl border border-amber-500/30 bg-[#090e18] text-center ${compact ? 'p-5' : 'p-8'}`}>
+        <ShieldCheck className="h-8 w-8 text-amber-400" />
+        <div>
+          <h3 className="font-display text-sm font-black uppercase tracking-wider text-white">
+            Sign in to access live predictions
+          </h3>
+          <p className="mx-auto mt-2 max-w-md font-body text-xs leading-relaxed text-slate-400">
+            The prediction engine requires an authenticated session and an active
+            subscription. API credentials and live table data are never exposed
+            to anonymous visitors.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Link
+            href="/golin?redirect=/dashboard/tool"
+            className="rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2 font-display text-xs font-black uppercase tracking-wider text-black"
+          >
+            Sign In
+          </Link>
+          <Link
+            href="/plans"
+            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 font-display text-xs font-bold uppercase tracking-wider text-slate-300 hover:bg-white/10"
+          >
+            View Plans
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`w-full flex flex-col gap-3 font-sans text-slate-100 ${compact ? 'p-2 text-xs' : 'p-3 sm:p-5'}`}>
-      {/* Top Header & Table Selection */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl border border-white/10 bg-[#090e18]/90 backdrop-blur-xl">
-        <div className="flex items-center gap-3">
+    <div className={`flex w-full flex-col gap-3 font-sans text-slate-100 ${compact ? 'p-2 text-xs' : 'p-3 sm:p-5'}`}>
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#090e18]/90 p-3 backdrop-blur-xl">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 font-display text-sm font-black uppercase tracking-wider text-white">
-            <Radio className="h-4 w-4 text-amber-400 animate-pulse" />
-            <span>ROULETTE<span className="text-amber-400">.TOOLS</span></span>
+            <Radio className="h-4 w-4 text-amber-400" />
+            <span>
+              ROULETTE<span className="text-amber-400">.TOOLS</span>
+            </span>
           </div>
 
-          <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-mono text-[10px] font-bold uppercase border ${
-            isLive
-              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-              : isConfigured === false
-              ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
-              : 'border-rose-500/40 bg-rose-500/10 text-rose-400'
-          }`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${isLive ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
-            <span>{statusMessage}</span>
-          </div>
+          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase ${statusClass}`}>
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                toolStatus === 'live'
+                  ? 'animate-pulse bg-emerald-400'
+                  : toolStatus === 'loading' || isLoading
+                    ? 'animate-pulse bg-sky-400'
+                    : 'bg-current'
+              }`}
+            />
+            {statusMessage}
+          </span>
+
+          <span className="hidden font-mono text-[10px] text-slate-500 sm:inline">
+            {lastUpdated ? `Updated ${lastUpdated}` : 'Waiting for first response'}
+          </span>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Table Selector */}
+        <div className="flex flex-wrap items-center gap-2">
           <select
             value={currentTableId}
-            onChange={(e) => setCurrentTableId(e.target.value)}
-            className="px-3 py-1.5 rounded-xl border border-white/10 bg-slate-900/90 text-xs font-semibold text-white focus:border-amber-500 focus:outline-none min-w-[190px]"
+            onChange={(event) => handleTableChange(event.target.value)}
+            className="min-w-[180px] rounded-xl border border-white/10 bg-slate-900/90 px-3 py-1.5 text-xs font-semibold text-white focus:border-amber-500 focus:outline-none"
+            aria-label="Select live roulette table"
           >
             {tables.length === 0 ? (
-              <option value="">Loading live tables...</option>
+              <option value="">{isConfigured === false ? 'API not configured' : 'Loading live tables…'}</option>
             ) : (
-              tables.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} {t.dealer ? `(${t.dealer})` : ''} — {t.spin_count || t.spins?.length || 0} spins
+              tables.map((table) => (
+                <option key={table.id} value={table.id}>
+                  {table.name || table.id}
+                  {table.dealer ? ` (${table.dealer})` : ''} —{' '}
+                  {table.spin_count ?? table.spins?.length ?? 0} spins
                 </option>
               ))
             )}
           </select>
 
-          {/* View Mode Tabs */}
-          <div className="inline-flex rounded-xl border border-white/10 bg-black/40 p-1 gap-1">
-            <button
-              onClick={() => setActiveView('racetrack')}
-              className={`px-2.5 py-1 rounded-lg font-display text-[10px] font-black uppercase tracking-wider transition-all ${
-                activeView === 'racetrack'
-                  ? 'bg-amber-500 text-black shadow-[0_0_10px_rgba(245,158,11,0.3)]'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              ⬭ Racetrack
-            </button>
-            <button
-              onClick={() => setActiveView('circular')}
-              className={`px-2.5 py-1 rounded-lg font-display text-[10px] font-black uppercase tracking-wider transition-all ${
-                activeView === 'circular'
-                  ? 'bg-amber-500 text-black shadow-[0_0_10px_rgba(245,158,11,0.3)]'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              ◯ Wheel
-            </button>
-            <button
-              onClick={() => setActiveView('livegraph')}
-              className={`px-2.5 py-1 rounded-lg font-display text-[10px] font-black uppercase tracking-wider transition-all ${
-                activeView === 'livegraph'
-                  ? 'bg-amber-500 text-black shadow-[0_0_10px_rgba(245,158,11,0.3)]'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              📈 Live Graph
-            </button>
-            <button
-              onClick={() => setActiveView('travel')}
-              className={`px-2.5 py-1 rounded-lg font-display text-[10px] font-black uppercase tracking-wider transition-all ${
-                activeView === 'travel'
-                  ? 'bg-amber-500 text-black shadow-[0_0_10px_rgba(245,158,11,0.3)]'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              📊 Travel
-            </button>
+          <div className="inline-flex gap-1 rounded-xl border border-white/10 bg-black/40 p-1">
+            {(
+              [
+                ['racetrack', '⬭ Racetrack'],
+                ['wheel', '◯ Wheel'],
+                ['livegraph', '📈 Live Graph'],
+                ['travel', '📊 Travel']
+              ] as Array<[ViewMode, string]>
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setActiveView(mode)}
+                className={`rounded-lg px-2 py-1 font-display text-[10px] font-black uppercase tracking-wider transition-all ${
+                  activeView === mode
+                    ? 'bg-amber-500 text-black shadow-[0_0_10px_rgba(245,158,11,0.3)]'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
           <button
-            onClick={() => fetchActiveTableData(true)}
+            type="button"
+            onClick={handleRefresh}
             disabled={isLoading}
-            className="p-1.5 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:text-white hover:bg-white/10"
-            title="Refresh active feed"
+            className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+            title="Refresh live data"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
+
+          {isAdmin && (
+            <Link
+              href="/heda/settings?tab=api"
+              className="inline-flex items-center gap-1 rounded-lg border border-teal-500/40 bg-teal-500/10 px-2.5 py-1.5 font-mono text-[10px] font-bold uppercase text-teal-300 hover:bg-teal-500/20"
+              title="Open API Settings"
+            >
+              <Settings2 className="h-3 w-3" />
+              API
+            </Link>
+          )}
         </div>
       </div>
 
-      {/* Unconfigured Notice Banner */}
+      {/* Configuration / error banners */}
       {isConfigured === false && (
-        <div className="p-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 text-amber-200 space-y-2">
+        <div className="space-y-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-200">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
+            <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400" />
             <h4 className="font-display text-sm font-bold uppercase tracking-wider">
               Dealer Signature API Credentials Required
             </h4>
           </div>
-          <p className="text-xs text-amber-200/90 leading-relaxed">
-            Please configure your <b>Server API Key (sk_key)</b> and <b>Public API Base URL</b> in the Platform Admin Panel (<code className="bg-black/30 px-1 py-0.5 rounded">Admin Console → Settings / Tool Management</code>). Once saved, live tables and real-time predictions will automatically stream here.
+          <p className="text-xs leading-relaxed text-amber-200/90">
+            The website can load real predictions only after a Main Admin saves the{' '}
+            <b>Public API URL</b> and <b>Server SK Key</b> in{' '}
+            <code className="rounded bg-black/30 px-1 py-0.5">Admin → Settings → API Settings</code>.
+            The key stays encrypted on the backend and is never sent to this browser.
           </p>
+          {isAdmin && (
+            <Link
+              href="/heda/settings?tab=api"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 font-display text-[10px] font-black uppercase tracking-wider text-black"
+            >
+              <Sparkles className="h-3 w-3" />
+              Open API Settings
+            </Link>
+          )}
         </div>
       )}
 
-      {/* Split Grid Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        {/* LEFT COLUMN: Live Signals, W/L Pattern, and Controls (4 cols on lg) */}
-        <div className="lg:col-span-5 flex flex-col gap-3">
-          {/* CARD 1: LIVE SIGNAL (Matching Image 2) */}
-          <div className="p-4 rounded-2xl border border-white/10 bg-gradient-to-br from-[#0c1220] to-[#070b14] shadow-xl">
-            <div className="flex items-center justify-between pb-3 border-b border-white/5">
-              <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+      {toolStatus !== 'live' && errorInfo && isConfigured !== false && (
+        <div className={`flex flex-wrap items-center gap-2 rounded-xl border p-3 font-mono text-[11px] ${
+          toolStatus === 'stale'
+            ? 'border-amber-500/30 bg-amber-500/5 text-amber-200'
+            : 'border-rose-500/30 bg-rose-500/5 text-rose-200'
+        }`}>
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span className="font-bold uppercase">{errorInfo.code || 'API ERROR'}</span>
+          <span className="text-slate-300">{errorInfo.message}</span>
+          {toolStatus === 'stale' && (
+            <span className="ml-auto text-[10px] text-amber-300/80">
+              Last valid prediction retained — no data was erased.
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="ml-auto rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase text-white hover:bg-white/10"
+          >
+            Retry now
+          </button>
+        </div>
+      )}
+
+      {isConfigured === true && tables.length === 0 && statusMessage === 'NO LIVE TABLES' && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3 font-mono text-[11px] text-sky-200">
+          <Info className="h-4 w-4 shrink-0" />
+          <span>
+            The provider API responded successfully but returned no live tables.
+            {feedInfo?.stale ? ' Its feed is currently marked stale.' : ''}
+          </span>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="ml-auto rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase text-white hover:bg-white/10"
+          >
+            Refresh
+          </button>
+        </div>
+      )}
+
+      {feedInfo?.stale && tables.length > 0 && (
+        <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2 font-mono text-[10px] text-amber-200">
+          Provider feed is marked STALE. The UI keeps the last valid prediction
+          and retries automatically.
+        </div>
+      )}
+
+      {/* Main grid */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+        {/* Left column */}
+        <div className="flex flex-col gap-3 lg:col-span-5">
+          {/* Live signal */}
+          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#0c1220] to-[#070b14] p-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <span className="flex items-center gap-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-slate-400">
                 <span className="h-2 w-2 rounded-sm bg-sky-400" />
                 Live Signal
               </span>
-              <span className="font-mono text-[10px] text-slate-400">Real-Time Engine</span>
+              <span className={`font-mono text-[10px] font-bold uppercase ${
+                p?.status === 'OVER'
+                  ? 'text-orange-400'
+                  : p?.status === 'UNDER'
+                    ? 'text-cyan-300'
+                    : 'text-slate-400'
+              }`}>
+                {p?.status ? `Travel ${p.status}` : 'Real-time engine'}
+              </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mt-3">
-              {/* Main Target Box */}
-              <div className="flex flex-col justify-center border-r border-white/10 pr-4">
-                <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Main Target
-                </span>
-                <div className="flex items-baseline gap-2 my-1">
-                  <span className="font-mono text-5xl font-black text-amber-400 leading-none">
-                    {dsp(p.main)}
-                  </span>
-                  <span className="font-mono text-xs font-bold text-slate-400">n9</span>
-                </div>
-                <span className="font-mono text-[10px] text-amber-400/90 font-semibold">
-                  9 numbers sector
-                </span>
+            {!ready ? (
+              <div className="py-5 text-center font-mono text-xs text-slate-400">
+                {p
+                  ? `Building prediction — ${p.spinsNeeded ?? 0} more spin(s) needed.`
+                  : isSwitching || isLoading
+                    ? `Calculating ${currentDirection} prediction…`
+                    : 'Waiting for a valid live table response.'}
               </div>
-
-              {/* Secondary Targets (Top Over & Top Under) */}
-              <div className="flex flex-col justify-around gap-2">
-                <div>
-                  <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                    Top Over
+            ) : (
+              <div className="mt-3 grid grid-cols-2 gap-4">
+                <div className="flex flex-col justify-center border-r border-white/10 pr-4">
+                  <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Main Target
                   </span>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xl font-black text-orange-400">
-                      {dsp(p.over_center || (p.top_over ? p.top_over[4] : '--'))}
+                  <div className="my-1 flex items-baseline gap-2">
+                    <span className="font-mono text-5xl font-black leading-none text-amber-400">
+                      {dsp(p.main)}
                     </span>
-                    <span className="font-mono text-[10px] text-slate-400">n4</span>
-                    {p.status === 'OVER' && (
-                      <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-orange-500/50 bg-orange-500/20 text-orange-400 uppercase">
-                        Last Hit
-                      </span>
-                    )}
+                    <span className="font-mono text-xs font-bold text-slate-400">n9</span>
                   </div>
+                  <span className="font-mono text-[10px] font-semibold text-amber-400/90">
+                    19-number sector · {p.direction}
+                  </span>
+                  <span className="mt-1 font-mono text-[10px] text-slate-500">
+                    Last spin: {dsp(p.lastSpin)}
+                  </span>
                 </div>
 
-                <div>
-                  <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                    Top Under
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xl font-black text-cyan-400">
-                      {dsp(p.under_center || (p.top_under ? p.top_under[4] : '--'))}
+                <div className="flex flex-col justify-around gap-2">
+                  <div>
+                    <span className="block font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Top Over
                     </span>
-                    <span className="font-mono text-[10px] text-slate-400">n4</span>
-                    {p.status === 'UNDER' && (
-                      <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-cyan-500/50 bg-cyan-500/20 text-cyan-400 uppercase">
-                        Last Hit
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xl font-black text-orange-400">{dsp(topOver)}</span>
+                      <span className="font-mono text-[10px] text-slate-400">n4</span>
+                      {p.status === 'OVER' && (
+                        <span className="rounded-full border border-orange-500/50 bg-orange-500/20 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase text-orange-400">
+                          Last hit
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="block font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Top Under
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xl font-black text-cyan-400">{dsp(topUnder)}</span>
+                      <span className="font-mono text-[10px] text-slate-400">n4</span>
+                      {p.status === 'UNDER' && (
+                        <span className="rounded-full border border-cyan-500/50 bg-cyan-500/20 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase text-cyan-400">
+                          Last hit
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            <div className="mt-3 grid grid-cols-3 gap-1.5 border-t border-white/5 pt-3 font-mono text-[10px]">
+              <div>
+                <span className="block text-slate-500">Travel avg</span>
+                <b className="text-white">{p?.travelAverage !== null && p?.travelAverage !== undefined ? r1(p.travelAverage) : '—'}</b>
+              </div>
+              <div>
+                <span className="block text-slate-500">K</span>
+                <b className="text-white">{p?.k ?? '—'}</b>
+              </div>
+              <div>
+                <span className="block text-slate-500">Window</span>
+                <b className="text-white">{p?.windowSize ?? currentWindow}</b>
               </div>
             </div>
           </div>
 
-          {/* CARD 2: WIN / LOSS PATTERN (Matching Image 2) */}
-          <div className="p-4 rounded-2xl border border-white/10 bg-[#090e18] shadow-xl space-y-3">
+          {/* W/L pattern */}
+          <div className="space-y-3 rounded-2xl border border-white/10 bg-[#090e18] p-4 shadow-xl">
             <div className="flex items-center justify-between">
               <div>
-                <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                <span className="block font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Detected Pattern
                 </span>
-                <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="mt-0.5 flex items-center gap-1.5">
                   <span className="font-mono text-xl font-black text-sky-400">{wCount}W</span>
-                  <span className="text-slate-600 font-black">·</span>
+                  <span className="font-black text-slate-600">·</span>
                   <span className="font-mono text-xl font-black text-rose-500">{lCount}L</span>
                 </div>
               </div>
 
-              <div className="text-right">
-                <span className="font-mono text-lg font-black text-white block leading-none">
-                  {pat.cycle ? `${pat.cycle}×` : '1×'}
+              <div className="max-w-[55%] text-right">
+                <span className="block truncate font-mono text-xs font-black uppercase text-white">
+                  {pattern.label || pattern.code || 'WAITING'}
                 </span>
-                <span className="font-mono text-[9px] uppercase tracking-wider text-slate-400">
-                  Cycle Size
+                <span className={`font-mono text-[9px] uppercase tracking-wider ${
+                  pattern.classification === 'READY'
+                    ? 'text-emerald-400'
+                    : pattern.classification === 'WAIT'
+                      ? 'text-amber-400'
+                      : 'text-slate-400'
+                }`}>
+                  {pattern.classification || (ready ? 'LIVE' : 'BUILDING')}
                 </span>
               </div>
             </div>
 
-            {/* W/L Horizontal Strip (LEFT TO RIGHT CHRONOLOGICAL FLOW) */}
             <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-              {n9List.length === 0 ? (
-                <div className="font-mono text-xs text-slate-400 py-1">
-                  Evaluating spins (25+ jumps needed for W/L evaluation)...
+              {last10.length === 0 ? (
+                <div className="py-1 font-mono text-xs text-slate-400">
+                  Evaluating spins (25+ jumps needed for W/L)…
                 </div>
               ) : (
-                n9List.slice(-10).map((res, idx, arr) => {
-                  const isNewest = idx === arr.length - 1;
+                last10.map((result, index) => {
+                  const isNewest = index === last10.length - 1;
                   return (
                     <div
-                      key={idx}
-                      className={`h-8 w-8 rounded-lg flex items-center justify-center font-mono text-xs font-black text-white shrink-0 transition-transform ${
-                        res === 'W'
-                          ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 border border-emerald-400/40'
-                          : 'bg-gradient-to-br from-rose-500 to-rose-700 border border-rose-400/40'
-                      } ${isNewest ? 'ring-2 ring-white scale-110 shadow-[0_0_10px_rgba(255,255,255,0.4)]' : ''}`}
-                      title={isNewest ? 'NEWEST RESULT' : `Spin #${idx + 1}`}
+                      key={`${result}-${index}`}
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border font-mono text-xs font-black text-white transition-transform ${
+                        result === 'W'
+                          ? 'border-emerald-400/40 bg-gradient-to-br from-emerald-500 to-emerald-700'
+                          : 'border-rose-400/40 bg-gradient-to-br from-rose-500 to-rose-700'
+                      } ${isNewest ? 'scale-110 ring-2 ring-white shadow-[0_0_10px_rgba(255,255,255,0.35)]' : ''}`}
+                      title={isNewest ? 'NEWEST RESULT' : `Result ${index + 1} of last 10`}
                     >
-                      {res}
+                      {result}
                     </div>
                   );
                 })
@@ -460,731 +923,307 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
             </div>
 
             <div className="font-mono text-[10px] text-slate-400">
-              last {n9List.length} signals: {wCount}W - {lCount}L. NEW = most recent result
+              last {last10.length} signals: {wCount}W - {lCount}L. NEW = most recent result.
             </div>
           </div>
 
-          {/* CARD 3: DIRECTION & CONTROLS (Matching Image 2) */}
-          <div className="p-4 rounded-2xl border border-white/10 bg-[#090e18] shadow-xl space-y-3.5">
+          {/* Direction and controls */}
+          <div className="space-y-3.5 rounded-2xl border border-white/10 bg-[#090e18] p-4 shadow-xl">
             <div className="flex items-center justify-between">
               <button
+                type="button"
                 onClick={handleToggleDirection}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-black border border-white/20 text-white font-display text-xs font-bold uppercase tracking-wider hover:border-amber-400 hover:shadow-[0_0_12px_rgba(245,158,11,0.3)] transition-all cursor-pointer"
+                className="flex items-center gap-2 rounded-xl border border-white/20 bg-black px-3.5 py-2 font-display text-xs font-bold uppercase tracking-wider text-white transition-all hover:border-amber-400 hover:shadow-[0_0_12px_rgba(245,158,11,0.3)]"
               >
-                <ArrowRightLeft className="h-3.5 w-3.5 text-amber-400" />
+                <ArrowRightLeft className={`h-3.5 w-3.5 text-amber-400 ${isSwitching ? 'animate-pulse' : ''}`} />
                 <span>Switch Side</span>
               </button>
 
               <div className="text-right">
-                <span className="font-mono text-[9px] uppercase tracking-wider text-slate-400 block">
+                <span className="block font-mono text-[9px] uppercase tracking-wider text-slate-400">
                   Direction
                 </span>
-                <span className="font-mono text-base font-black text-white flex items-center gap-1 justify-end">
+                <span className="flex items-center justify-end gap-1 font-mono text-base font-black text-white">
                   <span>{currentDirection === 'CW' ? '↻' : '↺'}</span>
                   <span>{currentDirection}</span>
+                  {isSwitching && <span className="font-mono text-[9px] text-amber-400">…</span>}
                 </span>
               </div>
             </div>
 
-            {/* Metrics Row */}
-            <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl border border-white/5 bg-black/40">
+            <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/5 bg-black/40 p-2.5">
               <div>
-                <span className="font-mono text-[9px] font-bold uppercase text-slate-400 block">
+                <span className="block font-mono text-[9px] font-bold uppercase text-slate-400">
                   Win Rate
                 </span>
-                <span className="font-mono text-sm font-black text-white">{winRate}%</span>
-                <div className="w-full h-1 bg-white/10 rounded-full mt-1 overflow-hidden">
+                <span className="font-mono text-sm font-black text-white">{pct(n9Accuracy)}</span>
+                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-white/10">
                   <div
-                    className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min(100, Math.max(0, Number(winRate)))}%` }}
+                    className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                    style={{ width: `${Math.min(100, Math.max(0, (n9Accuracy ?? 0) * 100))}%` }}
                   />
                 </div>
+                <span className="mt-1 block font-mono text-[8px] text-slate-500">n9 · n={n9Predictions}</span>
               </div>
 
               <div>
-                <span className="font-mono text-[9px] font-bold uppercase text-slate-400 block">
+                <span className="block font-mono text-[9px] font-bold uppercase text-slate-400">
                   Avg Used
                 </span>
                 <span className="font-mono text-sm font-black text-white">{currentWindow}</span>
               </div>
 
               <div>
-                <span className="font-mono text-[9px] font-bold uppercase text-slate-400 block">
-                  Trend
+                <span className="block font-mono text-[9px] font-bold uppercase text-slate-400">
+                  n4 Hit
                 </span>
-                <span className="font-mono text-sm font-black text-emerald-400">
-                  {pat.classification || (p.ready ? 'READY' : 'BUILDING')}
-                </span>
+                <span className="font-mono text-sm font-black text-emerald-400">{pct(n4Accuracy)}</span>
+                <span className="mt-1 block font-mono text-[8px] text-slate-500">n={n4Predictions}</span>
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-2 pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <button
-                onClick={() => setShowRawOutput(!showRawOutput)}
-                className="font-mono text-[10px] font-bold uppercase text-slate-400 hover:text-white transition-colors"
+                type="button"
+                onClick={() => setShowRawOutput((value) => !value)}
+                className="font-mono text-[10px] font-bold uppercase text-slate-400 transition-colors hover:text-white"
               >
                 {showRawOutput ? '▲ Hide Raw Output' : '▼ Show Raw Output'}
               </button>
 
               <div className="flex items-center gap-1.5">
                 <button
+                  type="button"
                   onClick={() => handleAdjustWindow(5)}
-                  className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 font-mono text-[10px] font-bold text-slate-300 hover:text-white hover:bg-white/10"
+                  className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] font-bold text-slate-300 hover:bg-white/10 hover:text-white"
                 >
                   + Add Avg
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleAdjustWindow(-5)}
-                  className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 font-mono text-[10px] font-bold text-slate-300 hover:text-white hover:bg-white/10"
+                  className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] font-bold text-slate-300 hover:bg-white/10 hover:text-white"
                 >
-                  - Sub Avg
+                  − Sub Avg
                 </button>
               </div>
             </div>
 
-            {/* Raw JSON Debug Viewer */}
             {showRawOutput && (
-              <pre className="p-3 rounded-xl border border-white/10 bg-black font-mono text-[10px] text-sky-400 max-h-48 overflow-y-auto whitespace-pre-wrap">
-                {JSON.stringify(predictionData || {}, null, 2)}
+              <pre className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black p-3 font-mono text-[10px] text-sky-400">
+                {JSON.stringify(rawAnalysis || { note: 'No API response yet' }, null, 2)}
               </pre>
             )}
           </div>
+
+          {/* Feed meta */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-white/5 bg-black/30 px-3 py-2 font-mono text-[10px] text-slate-400">
+            <span className="inline-flex items-center gap-1">
+              <ShieldCheck className="h-3 w-3 text-emerald-400" />
+              Server-side HMAC proxy
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Activity className="h-3 w-3 text-sky-400" />
+              Auto-refresh 6s
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Layers className="h-3 w-3 text-amber-400" />
+              {tables.length} live tables
+            </span>
+          </div>
         </div>
 
-        {/* RIGHT COLUMN: Visual Elements (Racetrack, Circular Wheel, Live Graph, Travel Chart) (7 cols on lg) */}
-        <div className="lg:col-span-7 flex flex-col gap-3">
-          {/* Winning Numbers Strip (Matching Image 1) */}
-          <div className="flex items-center gap-3 p-2.5 px-3 rounded-2xl border border-white/10 bg-black/80 overflow-x-auto shadow-inner">
-            <span className="font-mono text-[10px] font-bold uppercase text-slate-400 shrink-0">
+        {/* Right column */}
+        <div className="flex flex-col gap-3 lg:col-span-7">
+          {/* Winning strip */}
+          <div className="flex items-center gap-3 overflow-x-auto rounded-2xl border border-white/10 bg-black/80 p-2.5 px-3 shadow-inner">
+            <span className="shrink-0 font-mono text-[10px] font-bold uppercase text-slate-400">
               Winning Strip:
             </span>
             <div className="flex items-center gap-3">
-              {(spinsHistory.length > 0 ? spinsHistory.slice(-14) : lastSpin !== undefined ? [lastSpin] : []).map(
-                (num, idx, arr) => {
-                  const isLatest = idx === arr.length - 1;
+              {spinsNewestFirst.length > 0 ? (
+                spinsNewestFirst.slice(0, 14).map((num, index) => {
                   const color = getNumberColor(num);
+                  const latest = index === 0;
                   return (
                     <span
-                      key={idx}
-                      className={`font-mono text-sm font-black shrink-0 ${
-                        color === 'red' ? 'text-rose-500' : color === 'green' ? 'text-emerald-400' : 'text-white'
-                      } ${
-                        isLatest
-                          ? 'border border-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md shadow-[0_0_8px_rgba(255,255,255,0.3)]'
-                          : ''
-                      }`}
+                      key={`${num}-${index}`}
+                      className={`shrink-0 font-mono text-sm font-black ${
+                        color === 'red'
+                          ? 'text-rose-500'
+                          : color === 'green'
+                            ? 'text-emerald-400'
+                            : 'text-white'
+                      } ${latest ? 'rounded-md border border-slate-400 bg-slate-800/80 px-2 py-0.5 shadow-[0_0_8px_rgba(255,255,255,0.3)]' : ''}`}
+                      title={latest ? 'Latest spin' : `Older spin ${index}`}
                     >
                       {dsp(num)}
                     </span>
                   );
-                }
+                })
+              ) : (
+                <span className="font-mono text-xs text-slate-500">No spins received yet</span>
               )}
+            </div>
+            <span className="ml-auto shrink-0 font-mono text-[9px] uppercase text-slate-500">
+              newest → older
+            </span>
+          </div>
+
+          {/* View card */}
+          <div className="relative space-y-2 rounded-2xl border border-white/10 bg-[#070b14] p-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-white/5 pb-2">
+              <span className="flex items-center gap-1.5 font-display text-xs font-bold uppercase tracking-wider text-white">
+                <span
+                  className={`h-2 w-2 rounded-sm ${
+                    activeView === 'travel'
+                      ? 'bg-cyan-400'
+                      : activeView === 'livegraph'
+                        ? 'bg-amber-400'
+                        : 'bg-amber-400'
+                  }`}
+                />
+                {activeView === 'racetrack'
+                  ? 'European Roulette Oval Racetrack'
+                  : activeView === 'wheel'
+                    ? 'Radial Wheel Prediction Map'
+                    : activeView === 'livegraph'
+                      ? 'Live Graph · Fixed Yellow Reference'
+                      : 'Travel Chart · W/L n9 + n4'}
+              </span>
+              <div className="flex items-center gap-3 font-mono text-[10px] text-slate-400">
+                {activeView === 'racetrack' && (
+                  <div className="flex items-center gap-1">
+                    <span>NEIGHBORS:</span>
+                    <span className="font-bold text-amber-400">{neighborCount}</span>
+                  </div>
+                )}
+                <span className="uppercase">{currentDirection}</span>
+                <span>N={currentWindow}</span>
+              </div>
+            </div>
+
+            {activeView === 'racetrack' && (
+              <div className="w-full overflow-hidden rounded-xl border border-white/5 bg-[#020408] p-2">
+                <RacetrackOval
+                  prediction={
+                    p || {
+                      ready: false,
+                      direction: currentDirection,
+                      main: null,
+                      n9: [],
+                      topOver: [],
+                      topUnder: [],
+                      overCenter: null,
+                      underCenter: null,
+                      status: 'NEUTRAL',
+                      lastSpin: null,
+                      lastTravel: null,
+                      signedLastTravel: null,
+                      signedMean: null,
+                      travelAverage: null,
+                      k: null,
+                      windowSize: null,
+                      raw: null
+                    }
+                  }
+                  neighborCount={neighborCount}
+                  onAdjustNeighbor={(delta) =>
+                    setNeighborCount((previous) => Math.max(1, Math.min(9, previous + delta)))
+                  }
+                />
+              </div>
+            )}
+
+            {activeView === 'wheel' && (
+              <div className="w-full overflow-hidden rounded-xl border border-white/5 bg-[#020408] p-2">
+                {p ? (
+                  <PredictionWheel prediction={p} />
+                ) : (
+                  <div className="flex min-h-[260px] items-center justify-center font-mono text-xs text-slate-400">
+                    Waiting for the first valid prediction…
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeView === 'livegraph' && (
+              <div className="w-full overflow-hidden rounded-xl border border-white/5 bg-[#020408] p-2">
+                <LiveGraphChart
+                  data={travel}
+                  prediction={p}
+                  fallbackSpins={spinsForFallback}
+                  direction={currentDirection}
+                  window={currentWindow}
+                />
+              </div>
+            )}
+
+            {activeView === 'travel' && (
+              <div className="w-full overflow-hidden rounded-xl border border-white/5 bg-[#020408] p-2">
+                <TravelChart
+                  data={travel}
+                  prediction={p}
+                  fallbackSpins={spinsForFallback}
+                  direction={currentDirection}
+                  window={currentWindow}
+                />
+              </div>
+            )}
+
+            {isSwitching && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-2xl bg-[#05080f]/55 backdrop-blur-[1px]">
+                <div className="flex items-center gap-2 rounded-xl border border-amber-500/40 bg-[#0b1220]/95 px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-amber-300 shadow-xl">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  Calculating {currentDirection}…
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Legend / model note */}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+              <span className="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase text-amber-300">
+                <Zap className="h-3 w-3" /> Main prediction
+              </span>
+              <p className="mt-1 font-mono text-[10px] leading-relaxed text-slate-400">
+                Last spin + direction × rounded travel average. The same input
+                always produces the same deterministic sector.
+              </p>
+            </div>
+            <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-3">
+              <span className="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase text-orange-300">
+                <ChevronDown className="h-3 w-3 rotate-180" /> Top over n4
+              </span>
+              <p className="mt-1 font-mono text-[10px] leading-relaxed text-slate-400">
+                9-number sector offset +5 from the main pocket. Orange marks
+                the OVER side.
+              </p>
+            </div>
+            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
+              <span className="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase text-cyan-300">
+                <ChevronDown className="h-3 w-3" /> Top under n4
+              </span>
+              <p className="mt-1 font-mono text-[10px] leading-relaxed text-slate-400">
+                9-number sector offset −5 from the main pocket. Cyan marks the
+                UNDER side.
+              </p>
             </div>
           </div>
 
-          {/* VIEW 1: RACETRACK OVAL (Matching Image 1) */}
-          {activeView === 'racetrack' && (
-            <div className="p-4 rounded-2xl border border-white/10 bg-[#070b14] shadow-xl space-y-2">
-              <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                <span className="font-display text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-sm bg-amber-400" />
-                  European Roulette Oval Racetrack
-                </span>
-                <div className="flex items-center gap-1 font-mono text-[11px] text-slate-400">
-                  <span>NEIGHBORS:</span>
-                  <span className="font-bold text-amber-400">{neighborCount}</span>
-                </div>
-              </div>
-
-              <div className="w-full bg-[#020408] rounded-xl p-2 border border-white/5 overflow-hidden">
-                <RacetrackOvalSvg
-                  prediction={p}
-                  neighborCount={neighborCount}
-                  onAdjustNeighbor={(delta) => setNeighborCount((prev) => Math.max(1, Math.min(9, prev + delta)))}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* VIEW 2: CIRCULAR WHEEL (From User Code) */}
-          {activeView === 'circular' && (
-            <div className="p-4 rounded-2xl border border-white/10 bg-[#070b14] shadow-xl space-y-2">
-              <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                <span className="font-display text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-sm bg-amber-400" />
-                  Radial Wheel Prediction Engine
-                </span>
-                <span className="font-mono text-[10px] text-slate-400">37 Pockets Mathematical Radial</span>
-              </div>
-
-              <div className="max-w-[420px] mx-auto p-2">
-                <CircularWheelSvg prediction={p} />
-              </div>
-            </div>
-          )}
-
-          {/* VIEW 3: LIVE GRAPH WITH MIDDLE YELLOW LINE (Extra Requested Option) */}
-          {activeView === 'livegraph' && (
-            <div className="p-4 rounded-2xl border border-white/10 bg-[#070b14] shadow-xl space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                <span className="font-display text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-sm bg-amber-400" />
-                  Live Graph · Middle Yellow Mean Threshold
-                </span>
-                <span
-                  className={`font-mono text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                    (travelData?.line?.travel_average || 0) >= 0
-                      ? 'border border-orange-500/50 bg-orange-500/20 text-orange-400'
-                      : 'border border-cyan-500/50 bg-cyan-500/20 text-cyan-400'
-                  }`}
-                >
-                  {(travelData?.line?.travel_average || 0) >= 0 ? 'TOP OVER ▲' : 'TOP UNDER ▼'}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-4 text-[10px] font-mono text-slate-400 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-1 w-3 bg-amber-400 rounded-full" />
-                  <span>Middle Yellow Line (Mean)</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="h-1 w-3 bg-orange-400 rounded-full" />
-                  <span>Top Over Zone (Above)</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="h-1 w-3 bg-cyan-400 rounded-full" />
-                  <span>Top Under Zone (Below)</span>
-                </div>
-              </div>
-
-              <div className="w-full bg-[#020408] rounded-xl border border-white/5 overflow-hidden p-2">
-                <LiveThresholdGraphSvg travelData={travelData} />
-              </div>
-            </div>
-          )}
-
-          {/* VIEW 4: TRAVEL DATA (Direction-Aware Chart) */}
-          {activeView === 'travel' && (
-            <div className="p-4 rounded-2xl border border-white/10 bg-[#070b14] shadow-xl space-y-2">
-              <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                <span className="font-display text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-sm bg-cyan-400" />
-                  Travel Data &amp; W/L Historical Backtest
-                </span>
-                <span className="font-mono text-xs font-bold text-amber-400">
-                  {travelData?.direction === 'CCW' ? '−' : '+'}
-                  {(travelData?.line?.travel_average || 8.4).toFixed(1)} ({travelData?.direction || currentDirection})
-                </span>
-              </div>
-
-              <div className="w-full bg-[#020408] rounded-xl border border-white/5 overflow-hidden p-2">
-                <TravelChartSvg travelData={travelData} direction={currentDirection} />
-              </div>
-            </div>
-          )}
+          {/* Safety / honest note */}
+          <div className="flex items-start gap-2 rounded-xl border border-white/5 bg-black/20 p-3 font-mono text-[10px] leading-relaxed text-slate-500">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <span>
+              Predictions are generated from the live provider response and the
+              project&apos;s original travel mathematics. No random result,
+              hardcoded number, or fabricated confidence score is used. If the
+              API is offline, the last valid data is kept and marked stale.
+            </span>
+          </div>
         </div>
       </div>
     </div>
-  );
-}
-
-// =============================================================================
-// SUB-COMPONENT: RACETRACK OVAL SVG (Matching Image 1)
-// =============================================================================
-function RacetrackOvalSvg({
-  prediction,
-  neighborCount,
-  onAdjustNeighbor
-}: {
-  prediction: any;
-  neighborCount: number;
-  onAdjustNeighbor: (delta: number) => void;
-}) {
-  const mainNum = prediction?.main;
-  const topOverSet = new Set(prediction?.top_over || []);
-  const topUnderSet = new Set(prediction?.top_under || []);
-  const lastSpin = prediction?.last_spin;
-
-  // The 37 European numbers along the oval racetrack
-  const ovalNumbers = [
-    24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, // top straight (15)
-    3, 26, 0, // right curve (3)
-    32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, // bottom straight (15)
-    8, 23, 10, 5 // left curve (4)
-  ];
-
-  const xLeft = 140, xRight = 780;
-  const yTop = 60, yBottom = 260;
-  const cellW = (xRight - xLeft) / 15;
-  const cellH = 34;
-
-  const renderCell = (n: number, x: number, y: number, w: number, h: number) => {
-    let fill = '#0a0f18';
-    let stroke = 'rgba(255,255,255,0.18)';
-    let strokeW = 1;
-    let textFill = '#fff';
-
-    if (RED_NUMS.has(n)) fill = '#dc2626';
-    else if (BLACK_NUMS.has(n)) fill = '#090d14';
-    else if (n === 0) fill = '#475569';
-
-    if (topOverSet.has(n)) {
-      stroke = '#FF8C00';
-      strokeW = 2.2;
-      fill = 'rgba(255, 140, 0, 0.55)';
-    }
-
-    if (topUnderSet.has(n)) {
-      stroke = '#00CED1';
-      strokeW = 2.2;
-      fill = 'rgba(0, 206, 209, 0.55)';
-    }
-
-    if (n === mainNum) {
-      fill = '#FFD166';
-      stroke = '#fff';
-      strokeW = 2.8;
-      textFill = '#000';
-    }
-
-    if (n === lastSpin) {
-      stroke = '#ffffff';
-      strokeW = 3;
-    }
-
-    return (
-      <g key={`${n}-${x}-${y}`} transform={`translate(${x}, ${y})`}>
-        <rect width={w} height={h} rx={3} fill={fill} stroke={stroke} strokeWidth={strokeW} />
-        <text
-          x={w / 2}
-          y={h / 2 + 4.5}
-          textAnchor="middle"
-          fontFamily="'JetBrains Mono', monospace"
-          fontSize="12"
-          fontWeight="800"
-          fill={textFill}
-        >
-          {dsp(n)}
-        </text>
-      </g>
-    );
-  };
-
-  return (
-    <svg viewBox="0 0 940 340" className="w-full h-auto block select-none">
-      {/* Inner Background */}
-      <path
-        d={`M ${xLeft} ${yTop + cellH} L ${xRight} ${yTop + cellH} A 90 90 0 0 1 ${xRight} ${yBottom} L ${xLeft} ${yBottom} A 90 90 0 0 1 ${xLeft} ${yTop + cellH} Z`}
-        fill="#05080e"
-        stroke="rgba(255,255,255,0.14)"
-        strokeWidth="1.2"
-      />
-
-      {/* Sector Separator Lines */}
-      <line x1="320" y1={yTop + cellH} x2="380" y2={yBottom} stroke="rgba(255,255,255,0.25)" strokeWidth="1.4" />
-      <line x1="510" y1={yTop + cellH} x2="510" y2={yBottom} stroke="rgba(255,255,255,0.25)" strokeWidth="1.4" />
-      <path
-        d={`M 680 ${yTop + cellH} A 65 65 0 0 1 680 ${yBottom}`}
-        fill="none"
-        stroke="rgba(255,255,255,0.25)"
-        strokeWidth="1.4"
-      />
-
-      {/* Sector Labels (Classic French Betting Names) */}
-      <text x="240" y="180" textAnchor="middle" fontFamily="sans-serif" fontSize="19" fontWeight="700" letterSpacing="3" fill="#cbd5e1">
-        TIER
-      </text>
-      <text x="430" y="180" textAnchor="middle" fontFamily="sans-serif" fontSize="17" fontWeight="700" letterSpacing="3" fill="#cbd5e1">
-        ORPHELINS
-      </text>
-      <text x="590" y="180" textAnchor="middle" fontFamily="sans-serif" fontSize="18" fontWeight="700" letterSpacing="3" fill="#cbd5e1">
-        VOISINS
-      </text>
-      <text x="740" y="180" textAnchor="middle" fontFamily="sans-serif" fontSize="18" fontWeight="700" letterSpacing="3" fill="#cbd5e1">
-        ZERO
-      </text>
-
-      {/* Right Controls (+, 4, -) */}
-      <g transform="translate(885, 120)">
-        <circle
-          cx="20"
-          cy="15"
-          r="16"
-          fill="#0d1424"
-          stroke="rgba(255,255,255,0.3)"
-          strokeWidth="1.5"
-          className="cursor-pointer hover:stroke-amber-400"
-          onClick={() => onAdjustNeighbor(1)}
-        />
-        <text x="20" y="21" textAnchor="middle" fontFamily="monospace" fontSize="20" fontWeight="800" fill="#fff" pointerEvents="none">
-          +
-        </text>
-
-        <text x="20" y="70" textAnchor="middle" fontFamily="monospace" fontSize="24" fontWeight="900" fill="#fff">
-          {neighborCount}
-        </text>
-
-        <circle
-          cx="20"
-          cy="115"
-          r="16"
-          fill="#0d1424"
-          stroke="rgba(255,255,255,0.3)"
-          strokeWidth="1.5"
-          className="cursor-pointer hover:stroke-amber-400"
-          onClick={() => onAdjustNeighbor(-1)}
-        />
-        <text x="20" y="121" textAnchor="middle" fontFamily="monospace" fontSize="22" fontWeight="800" fill="#fff" pointerEvents="none">
-          −
-        </text>
-      </g>
-
-      {/* Top Straight */}
-      {ovalNumbers.slice(0, 15).map((n, i) => renderCell(n, xLeft + i * cellW, yTop, cellW, cellH))}
-
-      {/* Right Curve */}
-      {ovalNumbers.slice(15, 18).map((n, i) => {
-        const angle = -Math.PI / 2 + (i + 1) * (Math.PI / 4);
-        const cx = xRight + 10, cy = (yTop + yBottom + cellH) / 2;
-        const rx = 65, ry = (yBottom - yTop) / 2 + 10;
-        const x = cx + Math.cos(angle) * rx - 18;
-        const y = cy + Math.sin(angle) * ry - 14;
-        return renderCell(n, x, y, 36, cellH);
-      })}
-
-      {/* Bottom Straight */}
-      {ovalNumbers.slice(18, 33).map((n, i) => renderCell(n, xRight - (i + 1) * cellW, yBottom, cellW, cellH))}
-
-      {/* Left Curve */}
-      {ovalNumbers.slice(33, 37).map((n, i) => {
-        const angle = Math.PI / 2 + (i + 1) * (Math.PI / 5);
-        const cx = xLeft - 10, cy = (yTop + yBottom + cellH) / 2;
-        const rx = 65, ry = (yBottom - yTop) / 2 + 10;
-        const x = cx + Math.cos(angle) * rx - 18;
-        const y = cy + Math.sin(angle) * ry - 14;
-        return renderCell(n, x, y, 36, cellH);
-      })}
-    </svg>
-  );
-}
-
-// =============================================================================
-// SUB-COMPONENT: CIRCULAR WHEEL SVG (User Code)
-// =============================================================================
-function CircularWheelSvg({ prediction }: { prediction: any }) {
-  const size = 352, cx = 176, cy = 176, rO = 162, rI = 108;
-  const n9 = new Set(prediction?.n9 || []);
-  const OV = new Set(prediction?.top_over || []);
-  const UN = new Set(prediction?.top_under || []);
-  const ovOn = prediction?.status === 'OVER';
-  const unOn = prediction?.status === 'UNDER';
-
-  const overHalf = at((POS[prediction?.main] || 0) + 5);
-  const underHalf = at((POS[prediction?.main] || 0) - 5);
-
-  return (
-    <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-auto block select-none">
-      {/* Segments */}
-      {RING.map((n, i) => {
-        const a1 = (i / N) * Math.PI * 2 - Math.PI / 2;
-        const a2 = ((i + 1) / N) * Math.PI * 2 - Math.PI / 2;
-
-        let fill = 'rgba(15, 23, 42, 0.7)';
-        let stroke = 'rgba(255, 255, 255, 0.08)';
-        let tc = '#94a3b8';
-        let strokeW = 1;
-        let dash = '';
-
-        if (n9.has(n)) {
-          fill = 'rgba(255,140,0,.15)';
-          stroke = 'rgba(255,140,0,.38)';
-          tc = '#d9a468';
-        }
-
-        if (OV.has(n)) {
-          if (ovOn) {
-            fill = 'rgba(255,140,0,.46)';
-            stroke = '#FF8C00';
-            tc = '#fff';
-            strokeW = 2.2;
-          } else {
-            fill = 'rgba(255,140,0,.12)';
-            stroke = 'rgba(255,140,0,.55)';
-            tc = '#ffcf9b';
-            dash = '4 3';
-            strokeW = 1.3;
-          }
-        }
-
-        if (UN.has(n)) {
-          if (unOn) {
-            fill = 'rgba(0,206,209,.46)';
-            stroke = '#00CED1';
-            tc = '#fff';
-            strokeW = 2.2;
-          } else {
-            fill = 'rgba(0,206,209,.12)';
-            stroke = 'rgba(0,206,209,.55)';
-            tc = '#9fe9ea';
-            dash = '4 3';
-            strokeW = 1.3;
-          }
-        }
-
-        if (n === prediction?.main) {
-          fill = '#FFD166';
-          stroke = '#FFD166';
-          tc = '#1a1206';
-          strokeW = 2.6;
-        }
-
-        if (n === prediction?.last_spin) {
-          stroke = '#fff';
-          strokeW = 2.8;
-        }
-
-        const am = (a1 + a2) / 2, r = (rI + rO) / 2;
-        const x = cx + Math.cos(am) * r;
-        const y = cy + Math.sin(am) * r;
-
-        return (
-          <g key={n}>
-            <path
-              d={arc(cx, cy, rI, rO, a1, a2)}
-              fill={fill}
-              stroke={stroke}
-              strokeWidth={strokeW}
-              strokeDasharray={dash}
-            />
-            <text
-              x={x}
-              y={y}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fontFamily="monospace"
-              fontSize="12.5"
-              fontWeight="700"
-              fill={tc}
-              transform={`rotate(${(am * 180) / Math.PI + 90} ${x} ${y})`}
-            >
-              {dsp(n)}
-            </text>
-          </g>
-        );
-      })}
-
-      {/* Center Details */}
-      <circle cx={cx} cy={cy} r={rI - 9} fill="#0c1017" stroke="rgba(255,255,255,0.08)" />
-      <text x={cx} y={cy - 22} textAnchor="middle" fontFamily="monospace" fontSize="9" fill="#475569" letterSpacing="2">
-        MAIN PREDICTION
-      </text>
-      <text x={cx} y={cy + 10} textAnchor="middle" fontFamily="monospace" fontSize="32" fontWeight="900" fill="#FFD166">
-        {dsp(prediction?.main)}
-      </text>
-      <text x={cx} y={cy + 30} textAnchor="middle" fontFamily="monospace" fontSize="9" fill="#94a3b8">
-        n9 · 9 numbers
-      </text>
-      <text x={cx} y={cy + 50} textAnchor="middle" fontFamily="monospace" fontSize="9" fill="#FF8C00">
-        ▲ OVER {dsp(overHalf)}n4
-      </text>
-      <text x={cx} y={cy + 64} textAnchor="middle" fontFamily="monospace" fontSize="9" fill="#00CED1">
-        ▼ UNDER {dsp(underHalf)}n4
-      </text>
-    </svg>
-  );
-}
-
-// =============================================================================
-// SUB-COMPONENT: LIVE GRAPH WITH MIDDLE YELLOW LINE (Extra Requested Option)
-// =============================================================================
-function LiveThresholdGraphSvg({ travelData }: { travelData: any }) {
-  const points = travelData?.points ? travelData.points.slice(-30) : [];
-  const W = 880, H = 300;
-  const padL = 50, padR = 40, padT = 30, padB = 40;
-  const innerW = W - padL - padR;
-  const innerH = H - padT - padB;
-  const midY = padT + innerH / 2; // Middle Baseline (Yellow Line)
-
-  const yVals = [20, 10, 0, -10, -20];
-
-  let poly = '';
-  const circles: any[] = [];
-
-  if (points.length > 0) {
-    const stepX = innerW / Math.max(1, points.length - 1);
-    points.forEach((pt: any, i: number) => {
-      const v = pt.signed !== undefined ? pt.signed : pt.magnitude || 0;
-      const px = padL + i * stepX;
-      const clampedV = Math.max(-20, Math.min(20, v));
-      const py = midY - (clampedV / 20) * (innerH / 2);
-
-      poly += (i === 0 ? 'M' : 'L') + `${px} ${py} `;
-
-      const isCurrent = i === points.length - 1;
-      const isOver = py < midY;
-      const dotColor = isOver ? '#FF8C00' : '#00CED1';
-
-      circles.push(
-        <circle
-          key={i}
-          cx={px}
-          cy={py}
-          r={isCurrent ? 5.5 : 3.5}
-          fill={dotColor}
-          stroke="#fff"
-          strokeWidth={isCurrent ? 2 : 1}
-        />
-      );
-    });
-  }
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block select-none">
-      {/* Top Over Zone Background */}
-      <rect x={padL} y={padT} width={innerW} height={innerH / 2} fill="rgba(255, 140, 0, 0.08)" />
-      {/* Top Under Zone Background */}
-      <rect x={padL} y={midY} width={innerW} height={innerH / 2} fill="rgba(0, 206, 209, 0.08)" />
-
-      {/* Grid Lines */}
-      {yVals.map((val) => {
-        const yPos = midY - (val / 20) * (innerH / 2);
-        return (
-          <g key={val}>
-            <line x1={padL} y1={yPos} x2={W - padR} y2={yPos} stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-            <text x={padL - 10} y={yPos + 4} textAnchor="end" fontFamily="monospace" fontSize="9" fill="#475569">
-              {val > 0 ? `+${val}` : val}
-            </text>
-          </g>
-        );
-      })}
-
-      {/* Middle Yellow Line */}
-      <line x1={padL} y1={midY} x2={W - padR} y2={midY} stroke="#FFD166" strokeWidth={2.4} />
-      <text x={W - padR + 5} y={midY + 4} fontFamily="monospace" fontSize="9" fontWeight="700" fill="#FFD166">
-        0 (MEAN)
-      </text>
-
-      {/* Zone Watermark Labels */}
-      <text x={padL + 15} y={padT + 22} fontFamily="monospace" fontSize="11" fontWeight="800" fill="rgba(255,140,0,0.6)" letterSpacing="1">
-        ▲ TOP OVER ZONE
-      </text>
-      <text x={padL + 15} y={H - padB - 12} fontFamily="monospace" fontSize="11" fontWeight="800" fill="rgba(0,206,209,0.6)" letterSpacing="1">
-        ▼ TOP UNDER ZONE
-      </text>
-
-      {/* Plotted Trajectory */}
-      {poly && <path d={poly} fill="none" stroke="#fff" strokeWidth={2} strokeLinejoin="round" />}
-      {circles}
-    </svg>
-  );
-}
-
-// =============================================================================
-// SUB-COMPONENT: TRAVEL CHART SVG (Section 6.3)
-// =============================================================================
-function TravelChartSvg({ travelData, direction }: { travelData: any; direction: string }) {
-  const points = travelData?.points || [];
-  const line = travelData?.line || {};
-  const wl = travelData?.wl || {};
-  const D = (travelData?.direction || direction) === 'CCW' ? -1 : 1;
-  const X = line.travel_average || 8.4;
-  const lineVal = D * X;
-
-  const W = 900, H = 450;
-  const x0 = 62, x1 = 884;
-  const yTop = 42, yBot = 236;
-
-  const y = (v: number) => yTop + ((18 - v) / 36) * (yBot - yTop);
-  const x = (i: number) => x0 + (i / Math.max(1, points.length - 1)) * (x1 - x0);
-
-  let poly = '';
-  const dots: any[] = [];
-  const bigRings: any[] = [];
-
-  points.forEach((it: any, i: number) => {
-    const v = it.signed !== undefined ? it.signed : D * (it.magnitude || 0);
-    poly += (i === 0 ? 'M' : 'L') + `${x(i)} ${y(v)} `;
-
-    if (it.direction_changed) {
-      dots.push(<circle key={`dot-${i}`} cx={x(i)} cy={y(v)} r={3.1} fill="#FF3333" />);
-    }
-    if (it.big) {
-      bigRings.push(
-        <circle key={`big-${i}`} cx={x(i)} cy={y(v)} r={4.6} fill="none" stroke="#FF3333" strokeWidth={1.4} />
-      );
-    }
-  });
-
-  const rows = (wl.rows || []).slice(-40);
-  const sw = Math.min(18, (x1 - x0) / Math.max(1, rows.length) - 2);
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block select-none">
-      <rect width={W} height={H} fill="#080c13" />
-
-      {/* Grid Lines */}
-      {[-18, -12, -6, 0, 6, 12, 18].map((v) => (
-        <g key={v}>
-          <line x1={x0} y1={y(v)} x2={x1} y2={y(v)} stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
-          <text x={x0 - 7} y={y(v) + 3} textAnchor="end" fontFamily="monospace" fontSize="8" fill="#475569">
-            {v > 0 ? `+${v}` : v}
-          </text>
-        </g>
-      ))}
-
-      {/* +/- 7 Band */}
-      <rect
-        x={x0}
-        y={y(lineVal + 7)}
-        width={x1 - x0}
-        height={Math.max(2, y(lineVal - 7) - y(lineVal + 7))}
-        fill="rgba(255,140,0,.055)"
-      />
-
-      {/* Mean Travel Line */}
-      <line x1={x0} y1={y(lineVal)} x2={x1} y2={y(lineVal)} stroke="#FF8C00" strokeWidth={1.8} />
-      <text x={x1} y={y(lineVal) - 6} textAnchor="end" fontFamily="monospace" fontSize="9" fill="#FF8C00">
-        X = {D === 1 ? '+' : '−'}{X.toFixed(1)} ({D === 1 ? 'CW' : 'CCW'})
-      </text>
-
-      {/* Trajectory */}
-      {poly && <path d={poly} fill="none" stroke="#00CED1" strokeWidth={1.7} strokeLinejoin="round" />}
-      {dots}
-      {bigRings}
-
-      <text x={x0} y={20} fontFamily="monospace" fontSize="9" fill="#94a3b8" letterSpacing="2">
-        ROW 1 · TRAVEL {D === 1 ? 'CW +' : 'CCW −'}
-      </text>
-      <text x={x0} y={264} fontFamily="monospace" fontSize="9" fill="#94a3b8" letterSpacing="2">
-        ROW 2 · W/L n9
-      </text>
-      <text x={x0} y={328} fontFamily="monospace" fontSize="9" fill="#94a3b8" letterSpacing="2">
-        ROW 3 · W/L n4
-      </text>
-
-      {/* W/L n9 and n4 Rows */}
-      {rows.map((r: any, i: number) => {
-        const xx = x0 + i * ((x1 - x0) / Math.max(1, rows.length));
-        const win9 = r.n9 === 'W' || r.win9;
-        const c9 = win9 ? '#18C07A' : '#FF3333';
-
-        const win4 = r.n4;
-        const c4 = win4 === null || win4 === undefined ? 'rgba(255,255,255,0.05)' : win4 === 'W' || win4 === true ? '#18C07A' : '#FF3333';
-
-        return (
-          <g key={i}>
-            <rect x={xx} y={278} width={sw} height={17} rx={3} fill={c9} opacity={win9 ? 0.75 : 0.55} />
-            <text x={xx + sw / 2} y={290} textAnchor="middle" fontFamily="monospace" fontSize="8" fill="#fff">
-              {win9 ? 'W' : 'L'}
-            </text>
-
-            <rect x={xx} y={342} width={sw} height={17} rx={3} fill={c4} opacity={win4 === null ? 0.35 : 0.75} />
-            <text x={xx + sw / 2} y={354} textAnchor="middle" fontFamily="monospace" fontSize="8" fill="#fff">
-              {win4 === null || win4 === undefined ? '–' : win4 === 'W' || win4 === true ? 'W' : 'L'}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
   );
 }

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sparkles, ArrowRight, ShieldCheck, Zap, Lock, Terminal, Activity, CheckCircle2 } from 'lucide-react';
+import { Sparkles, ArrowRight, ShieldCheck, Zap, Lock, Terminal, Activity } from 'lucide-react';
 import { PremiumLockModal } from './PremiumLockModal';
 import { useAuth } from '../context/AuthContext';
 
@@ -96,107 +96,63 @@ export function Hero() {
               </div>
             </div>
 
-            {/* Right Column: Live Table Prediction Simulation Card */}
+            {/* Right Column: Honest Engine Pipeline (no fake live values) */}
             <div className="lg:col-span-5 w-full">
-              <div className="relative rounded-2xl border border-amber-500/30 bg-gradient-to-b from-[#111728] via-[#0c101c] to-[#080b12] p-5 sm:p-6 shadow-[0_25px_60px_rgba(0,0,0,0.85)] backdrop-blur-2xl">
-                {/* Glowing edge highlight */}
-                <div className="absolute top-0 left-1/4 right-1/4 h-[1px] bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
+              <div className="relative rounded-2xl border border-amber-500/30 bg-gradient-to-b from-[#111728] via-[#0c101c] to-[#080b12] p-5 shadow-[0_25px_60px_rgba(0,0,0,0.85)] backdrop-blur-2xl sm:p-6">
+                <div className="absolute left-1/4 right-1/4 top-0 h-[1px] bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
 
-                {/* Card Header */}
-                <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
+                <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-4">
                   <div className="flex items-center gap-2.5">
                     <span className="relative flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400" />
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
                     </span>
                     <span className="font-display text-xs font-black uppercase tracking-wider text-white">
-                      Evolution • Lightning Table 1
+                      Dealer Signature Pipeline
                     </span>
                   </div>
-                  <span className="rounded-md bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 font-display text-[10px] font-black text-rose-300 uppercase tracking-widest shadow-[0_0_10px_rgba(244,63,94,0.25)]">
-                    HOT STREAK (8/9)
+                  <span className="rounded-md border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 font-display text-[10px] font-black uppercase tracking-widest text-emerald-300">
+                    Server-side
                   </span>
                 </div>
 
-                {/* Number History Pills */}
-                <div className="mb-5">
-                  <p className="font-display text-[10px] uppercase tracking-wider text-slate-400 mb-2.5 flex items-center justify-between">
-                    <span>Recent Spin Outcomes</span>
-                    <span className="font-mono text-[9px] text-amber-400">Rhythm: Steady (4.2s)</span>
-                  </p>
-                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                    {[14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26].map((num, idx) => {
-                      const isZero = num === 0;
-                      const isRed = [32, 19, 21, 25, 27, 34, 36, 30, 23, 5, 16, 1, 14, 9, 18, 7, 12, 3].includes(num);
-                      const isLatest = idx === 0;
-                      return (
-                        <span
-                          key={idx}
-                          className={`flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg font-display text-xs font-black transition-all ${
-                            isLatest ? 'scale-110 ring-2 ring-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.6)]' : ''
-                          } ${
-                            isZero
-                              ? 'bg-emerald-600/30 text-emerald-400 border border-emerald-500/50'
-                              : isRed
-                              ? 'bg-rose-600/30 text-rose-300 border border-rose-500/50'
-                              : 'bg-slate-800/80 text-slate-200 border border-slate-700'
-                          }`}
-                        >
-                          {num}
-                        </span>
-                      );
-                    })}
-                  </div>
+                <div className="space-y-2.5">
+                  <PipelineStep
+                    number="01"
+                    title="Authenticated provider feed"
+                    detail="The backend proxy requests live tables with HMAC-SHA256 signed headers. The SK key never reaches this page."
+                  />
+                  <PipelineStep
+                    number="02"
+                    title="Deterministic travel math"
+                    detail="Travel distances, the rolling average and the ±7 rhythm band are calculated from received spins only."
+                  />
+                  <PipelineStep
+                    number="03"
+                    title="Main · n9 · OVER · UNDER"
+                    detail="The main pocket, 19-number n9 sector, Top Over n4 and Top Under n4 are derived by the same engine for CW and CCW."
+                  />
+                  <PipelineStep
+                    number="04"
+                    title="Wheel · Travel · Live Graph"
+                    detail="All charts render the same response together. CW/CCW switching recalculates immediately without a page reload."
+                  />
                 </div>
 
-                {/* Prediction Insight Box */}
-                <div className="rounded-xl border border-white/10 bg-slate-950/80 p-4 mb-4 shadow-inner">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-1.5">
-                      <Zap className="h-4 w-4 text-amber-400" />
-                      <span className="font-display text-xs font-black uppercase tracking-wider text-amber-300">
-                        Algorithmic Prediction
-                      </span>
-                    </div>
-                    <span className="font-display text-[10px] text-emerald-400 font-bold uppercase tracking-wider bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                      88.8% Hit Confidence
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                    <div className="rounded-lg border border-white/5 bg-white/[0.02] p-2">
-                      <p className="font-display text-[9px] text-slate-500 uppercase tracking-wider">Strategy</p>
-                      <p className="font-display text-xs font-bold text-slate-200">Dealer Sig</p>
-                    </div>
-                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-2">
-                      <p className="font-display text-[9px] text-amber-300/80 uppercase tracking-wider">Target</p>
-                      <p className="font-display text-xs font-black text-amber-400">0 n4</p>
-                    </div>
-                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-2">
-                      <p className="font-display text-[9px] text-emerald-300/80 uppercase tracking-wider">Distance</p>
-                      <p className="font-display text-xs font-black text-emerald-400">1 Pocket</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-slate-400 border-t border-white/5 pt-2 font-display">
-                    <span>Travel Line: <strong className="text-white">TOP OVER</strong></span>
-                    <span>Confirmed: <strong className="text-amber-400">7 Consecutive Spins</strong></span>
-                  </div>
-                </div>
-
-                {/* Demo Mode Notice */}
-                <div className="flex items-center justify-between rounded-xl border border-amber-500/20 bg-amber-500/5 px-3.5 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <Lock className="h-3.5 w-3.5 text-amber-400" />
-                    <span className="font-display text-[11px] font-semibold text-slate-300">
-                      Live Demo Mode Active
-                    </span>
+                <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3.5 py-2.5">
+                  <div className="flex items-start gap-2">
+                    <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+                    <p className="font-body text-[11px] leading-relaxed text-slate-300">
+                      This card explains the pipeline; it does not display demo
+                      spins or a fake confidence score. Open the member tool to
+                      view authenticated live values.
+                    </p>
                   </div>
                   <button
                     onClick={() => setLockModalOpen(true)}
-                    className="font-display text-[10px] font-bold uppercase tracking-wider text-amber-400 hover:text-amber-300 hover:underline transition-colors"
+                    className="mt-2 font-display text-[10px] font-bold uppercase tracking-wider text-amber-400 transition-colors hover:text-amber-300 hover:underline"
                   >
-                    Unlock All Tables →
+                    View access options →
                   </button>
                 </div>
               </div>
@@ -208,5 +164,27 @@ export function Hero() {
       {/* Lock Screen Modal */}
       <PremiumLockModal isOpen={lockModalOpen} onClose={() => setLockModalOpen(false)} />
     </>
+  );
+}
+
+function PipelineStep({
+  number,
+  title,
+  detail
+}: {
+  number: string;
+  title: string;
+  detail: string;
+}) {
+  return (
+    <div className="flex gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-3">
+      <span className="font-mono text-[10px] font-black text-amber-400">{number}</span>
+      <div>
+        <p className="font-display text-[11px] font-bold uppercase tracking-wider text-slate-200">
+          {title}
+        </p>
+        <p className="mt-1 font-body text-[11px] leading-relaxed text-slate-400">{detail}</p>
+      </div>
+    </div>
   );
 }

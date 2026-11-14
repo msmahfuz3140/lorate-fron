@@ -42,12 +42,14 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
   const [toolMode, setToolModeState] = useState<ToolMode>('iframe');
   const [hasAccess, setHasAccess] = useState(true);
   const [predictionData, setPredictionData] = useState<PredictionData>({
-    tableName: 'Live European Roulette',
-    provider: 'Evolution Gaming',
-    lastNumbers: [25, 17, 34, 6],
-    predictedPocket: '25n1',
-    confidence: '94%',
-    updatedAt: undefined,
+    // Empty until the real API returns a table/prediction. No mock numbers or
+    // fabricated confidence values are placed in the widget state.
+    tableName: 'Waiting for live API',
+    provider: undefined,
+    lastNumbers: [],
+    predictedPocket: undefined,
+    confidence: undefined,
+    updatedAt: undefined
   });
 
   // Cross-tab broadcast helper
@@ -63,7 +65,6 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
 
   // Restore preferences from localStorage and listen to cross-tab updates
   useEffect(() => {
-    setPredictionData((prev) => ({ ...prev, updatedAt: Date.now() }));
     try {
       const savedActive = localStorage.getItem('sloot_widget_active');
       const savedOpen = localStorage.getItem('sloot_widget_open');

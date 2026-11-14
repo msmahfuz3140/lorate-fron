@@ -214,8 +214,14 @@ export function FloatingPredictionWidget() {
               </div>
 
               {/* Live Status Beacon Dot (Top-Right Badge) */}
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 sm:h-5 sm:w-5 items-center justify-center rounded-full bg-emerald-500 text-[8px] sm:text-[9px] font-black font-display text-black shadow-md border-2 border-[#070b14]">
-                <span className="absolute h-full w-full rounded-full bg-emerald-400 animate-ping opacity-75" />
+              <span
+                className={`absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-black font-display text-black shadow-md border-2 border-[#070b14] sm:h-5 sm:w-5 sm:text-[9px] ${
+                  predictionData?.predictedPocket ? 'bg-emerald-500' : 'bg-amber-500'
+                }`}
+              >
+                {predictionData?.predictedPocket && (
+                  <span className="absolute h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                )}
                 <span className="relative">●</span>
               </span>
 
@@ -270,9 +276,19 @@ export function FloatingPredictionWidget() {
                 <span className="font-display text-xs sm:text-sm font-black tracking-wider text-white truncate">
                   ROULETTE<span className="text-amber-400">.TOOLS</span>
                 </span>
-                <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.2 text-[9px] font-mono text-emerald-400 font-bold shrink-0">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  LIVE
+                <span
+                  className={`flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.2 text-[9px] font-mono font-bold ${
+                    predictionData?.predictedPocket
+                      ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-400'
+                      : 'border-amber-500/30 bg-amber-500/15 text-amber-300'
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      predictionData?.predictedPocket ? 'animate-pulse bg-emerald-400' : 'bg-amber-400'
+                    }`}
+                  />
+                  {predictionData?.predictedPocket ? 'LIVE' : 'WAIT'}
                 </span>
               </div>
               <p className="text-[10px] text-slate-400 truncate max-w-[150px] sm:max-w-[220px]">

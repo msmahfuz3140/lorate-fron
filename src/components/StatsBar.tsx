@@ -1,34 +1,38 @@
 import React from 'react';
-import { Cpu, BarChart3, Radio, Clock } from 'lucide-react';
+import { ArrowLeftRight, BarChart3, Cpu, ShieldCheck } from 'lucide-react';
 
+/**
+ * Capability strip. Replaces previously unverifiable uptime/prediction-count
+ * marketing figures with facts that are true for the shipped engine.
+ */
 export function StatsBar() {
   const stats = [
     {
       icon: <Cpu className="h-5 w-5 text-amber-400" />,
-      label: 'Core Strategies',
-      value: '3 Active',
-      sub: '+1 Experimental',
+      label: 'Prediction Engine',
+      value: 'Dealer Signature',
+      sub: 'Deterministic travel math',
       highlightColor: 'text-amber-400'
     },
     {
-      icon: <BarChart3 className="h-5 w-5 text-emerald-400" />,
-      label: 'Predictions Formulated',
-      value: '82,450,000+',
-      sub: 'Algorithmic hits',
+      icon: <ArrowLeftRight className="h-5 w-5 text-emerald-400" />,
+      label: 'Directions',
+      value: 'CW · CCW',
+      sub: 'Independent calculations',
       highlightColor: 'text-emerald-400'
     },
     {
-      icon: <Radio className="h-5 w-5 text-rose-400" />,
-      label: 'Monitored Tables',
-      value: '20+ Tables',
-      sub: 'Evolution & Pragmatic',
-      highlightColor: 'text-rose-400'
+      icon: <BarChart3 className="h-5 w-5 text-sky-400" />,
+      label: 'Analysis Views',
+      value: 'Wheel · Travel · Live',
+      sub: 'One synchronized response',
+      highlightColor: 'text-sky-400'
     },
     {
-      icon: <Clock className="h-5 w-5 text-teal-400" />,
-      label: 'Engine Uptime',
-      value: '99.98%',
-      sub: '24/7 Real-Time Data',
+      icon: <ShieldCheck className="h-5 w-5 text-teal-400" />,
+      label: 'Key Security',
+      value: 'Server-side HMAC',
+      sub: 'Encrypted at rest',
       highlightColor: 'text-teal-400'
     }
   ];
@@ -39,7 +43,7 @@ export function StatsBar() {
         {stats.map((stat, i) => (
           <div
             key={i}
-            className="flex items-center gap-4 rounded-xl border border-white/5 bg-gradient-to-br from-slate-900/60 to-slate-950/80 p-4 shadow-lg backdrop-blur-md transition-all hover:border-white/15 hover:translate-y-[-2px]"
+            className="flex items-center gap-4 rounded-xl border border-white/5 bg-gradient-to-br from-slate-900/60 to-slate-950/80 p-4 shadow-lg backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-white/15"
           >
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.02]">
               {stat.icon}
@@ -49,11 +53,11 @@ export function StatsBar() {
                 {stat.label}
               </p>
               <div className="flex items-baseline gap-2">
-                <span className={`font-display text-lg font-bold sm:text-xl ${stat.highlightColor}`}>
+                <span className={`font-display text-sm font-bold sm:text-lg ${stat.highlightColor}`}>
                   {stat.value}
                 </span>
               </div>
-              <p className="font-display text-[10px] text-slate-400 tracking-wider">
+              <p className="font-display text-[10px] tracking-wider text-slate-400">
                 {stat.sub}
               </p>
             </div>

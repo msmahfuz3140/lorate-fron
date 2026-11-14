@@ -57,16 +57,21 @@ export function buildQueryString(params?: Record<string, any>): string {
   return str ? `?${str}` : '';
 }
 
-async function performFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+function buildAuthHeaders(options: RequestInit = {}): Record<string, string> {
   const token = getStoredToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> || {})
+    ...((options.headers as Record<string, string>) || {})
   };
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  return headers;
+}
+
+async function performFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const headers = buildAuthHeaders(options);
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
     credentials: options.credentials || 'include',
@@ -86,6 +91,88 @@ async function performFetch<T>(endpoint: string, options: RequestInit = {}): Pro
   }
 
   return (data?.data ?? data) as T;
+}
+
+/**
+ * Raw request used by the Dealer Signature proxy.
+ *
+ * The proxy endpoints already return the provider envelope:
+ *   { success: true, data: {...}, meta: {...} }
+ *
+ * The normal `request()` helper unwraps `.data`, which previously made the
+ * tool check `res.success` / `res.data` on an already-unwrapped object and
+ * silently discard every API response. Keeping the envelope intact here fixes
+ * that class of bug for all DS endpoints.
+ */
+async function performFetchRaw<T>(
+  endpoint: string,
+  options: RequestInit & { timeoutMs?: number } = {}
+): Promise<T> {
+  const headers = buildAuthHeaders(options);
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs ?? 15000;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      credentials: options.credentials || 'include',
+      ...options,
+      headers,
+      signal: options.signal || controller.signal
+    });
+  } catch (err: any) {
+    const timedOut = err?.name === 'AbortError';
+    const requestError = new Error(
+      timedOut
+        ? `The API request timed out after ${Math.round(timeoutMs / 1000)} seconds.`
+        : err?.message || 'Network request failed.'
+    ) as Error & { code?: string; status?: number };
+    requestError.code = timedOut ? 'CLIENT_TIMEOUT' : 'NETWORK_ERROR';
+    throw requestError;
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data?.success === false) {
+    const errorMsg =
+      data?.error?.message ||
+      data?.message ||
+      `Request failed with status ${response.status}`;
+    const err = new Error(errorMsg) as Error & {
+      code?: string;
+      status: number;
+      details?: any;
+      meta?: any;
+    };
+    err.code = data?.error?.code;
+    err.status = response.status;
+    err.details = data?.error?.details;
+    err.meta = data?.meta;
+    throw err;
+  }
+
+  return data as T;
+}
+
+async function requestRaw<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  const method = (options.method || 'GET').toUpperCase();
+  const token = getStoredToken();
+  const cacheKey = `raw:${token ? 'auth:' : 'pub:'}${endpoint}`;
+
+  if (method === 'GET') {
+    return apiCache.dedupe(
+      cacheKey,
+      () => performFetchRaw<T>(endpoint, options),
+      // Always ask for fresh live data; dedupe still prevents parallel
+      // identical requests from the same browser tab.
+      { ttlMs: 0, bypassCache: true }
+    );
+  }
+
+  return performFetchRaw<T>(endpoint, options);
 }
 
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
@@ -726,41 +813,61 @@ export const authClient = {
   },
 
   async getDsStatus(): Promise<any> {
-    return request<any>('/ds/status', { bypassCache: true });
+    return requestRaw<any>('/ds/status', { bypassCache: true });
   },
 
   async getDsTables(params?: { provider?: string; search?: string; filter?: string; sort?: string; limit?: number; window?: number }): Promise<any> {
-    return request<any>(`/ds/tables${buildQueryString(params)}`, { bypassCache: true });
+    return requestRaw<any>(`/ds/tables${buildQueryString(params)}`, { bypassCache: true });
+  },
+
+  async getDsTable(tableId: string): Promise<any> {
+    return requestRaw<any>(`/ds/tables/${encodeURIComponent(tableId)}`, { bypassCache: true });
   },
 
   async getDsTablePrediction(tableId: string, direction: string = 'CW', window: number = 25): Promise<any> {
-    return request<any>(`/ds/tables/${encodeURIComponent(tableId)}/prediction?direction=${direction}&window=${window}`, {
-      bypassCache: true
-    });
+    return requestRaw<any>(
+      `/ds/tables/${encodeURIComponent(tableId)}/prediction?direction=${encodeURIComponent(direction)}&window=${encodeURIComponent(String(window))}`,
+      { bypassCache: true }
+    );
   },
 
   async getDsTableTravelChart(tableId: string, direction: string = 'CW', window: number = 25): Promise<any> {
-    return request<any>(`/ds/tables/${encodeURIComponent(tableId)}/travel-chart?direction=${direction}&window=${window}`, {
-      bypassCache: true
-    });
+    return requestRaw<any>(
+      `/ds/tables/${encodeURIComponent(tableId)}/travel-chart?direction=${encodeURIComponent(direction)}&window=${encodeURIComponent(String(window))}`,
+      { bypassCache: true }
+    );
   },
 
   async getDsTablePattern(tableId: string, direction: string = 'CW', window: number = 25): Promise<any> {
-    return request<any>(`/ds/tables/${encodeURIComponent(tableId)}/pattern?direction=${direction}&window=${window}`, {
-      bypassCache: true
-    });
+    return requestRaw<any>(
+      `/ds/tables/${encodeURIComponent(tableId)}/pattern?direction=${encodeURIComponent(direction)}&window=${encodeURIComponent(String(window))}`,
+      { bypassCache: true }
+    );
   },
 
   async getDsTableHistory(tableId: string, params?: { period?: string; page?: number; limit?: number; window?: number }): Promise<any> {
-    return request<any>(`/ds/tables/${encodeURIComponent(tableId)}/history${buildQueryString(params)}`, {
+    return requestRaw<any>(`/ds/tables/${encodeURIComponent(tableId)}/history${buildQueryString(params)}`, {
       bypassCache: true
     });
   },
 
   async getDsScanner(params?: { min_spins?: number; min_accuracy?: number; min_rhythm?: number; direction?: string; sort?: string; window?: number }): Promise<any> {
-    return request<any>('/ds/scanner', {
+    return requestRaw<any>('/ds/scanner', {
       method: 'POST',
       body: JSON.stringify(params || {}),
+      bypassCache: true
+    });
+  },
+
+  // --- Admin API Settings diagnostics ---
+  async getAdminDsDiagnostics(): Promise<any> {
+    return request<any>('/admin/tool/ds-diagnostics', { bypassCache: true });
+  },
+
+  async testAdminDsConnection(payload?: { dsApiUrl?: string; dsApiKey?: string }): Promise<any> {
+    return request<any>('/admin/tool/ds-test', {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
       bypassCache: true
     });
   },

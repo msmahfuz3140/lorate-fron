@@ -38,8 +38,12 @@ export default function AdminToolPage() {
   const [toolAccessPolicy, setToolAccessPolicy] = useState('PREMIUM_ONLY');
   const [dsApiKey, setDsApiKey] = useState('');
   const [dsApiUrl, setDsApiUrl] = useState('');
+  const [dsApiKeyConfigured, setDsApiKeyConfigured] = useState(false);
+  const [dsApiKeyMasked, setDsApiKeyMasked] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTestingApi, setIsTestingApi] = useState(false);
+  const [apiTestSummary, setApiTestSummary] = useState<string | null>(null);
 
   // Confirmation dialogs
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -67,7 +71,11 @@ export default function AdminToolPage() {
         setMaintenanceMode(res.settings.maintenanceMode);
         setPublicStatusMessage(res.settings.publicStatusMessage || '');
         setToolAccessPolicy(res.settings.toolAccessPolicy || 'PREMIUM_ONLY');
-        setDsApiKey(res.settings.dsApiKey || '');
+        // The server returns only a masked key. A blank input means "keep the
+        // existing secret"; the plaintext key is never available to this page.
+        setDsApiKey('');
+        setDsApiKeyConfigured(!!res.settings.dsApiKeyConfigured);
+        setDsApiKeyMasked(res.settings.dsApiKeyMasked || '');
         setDsApiUrl(res.settings.dsApiUrl || '');
       }
     } catch (err: any) {
@@ -84,21 +92,49 @@ export default function AdminToolPage() {
   const handleSaveSettings = async (auditReason?: string) => {
     setIsSaving(true);
     try {
-      await authClient.updateAdminToolSettings({
+      const payload: any = {
         isToolEnabled,
         maintenanceMode,
         publicStatusMessage,
         toolAccessPolicy,
-        dsApiKey,
         dsApiUrl,
         reason: auditReason || 'Admin updated tool operational parameters'
-      });
+      };
+      if (dsApiKey.trim()) payload.dsApiKey = dsApiKey.trim();
+
+      await authClient.updateAdminToolSettings(payload);
+      setDsApiKey('');
       showToast('success', 'Roulette tool parameters updated successfully.');
       fetchTelemetry();
     } catch (err: any) {
       showToast('error', err?.message || 'Failed to update tool settings.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleTestApi = async () => {
+    setIsTestingApi(true);
+    setApiTestSummary(null);
+    try {
+      const result = await authClient.testAdminDsConnection({
+        dsApiUrl,
+        dsApiKey: dsApiKey.trim() || undefined
+      });
+      const summary = result?.success
+        ? `API connection passed in ${result.latencyMs ?? 0} ms.`
+        : result?.error?.message ||
+          result?.checks?.find((check: any) => !check.ok)?.message ||
+          'API connection failed.';
+      setApiTestSummary(summary);
+      showToast(result?.success ? 'success' : 'error', summary);
+      fetchTelemetry();
+    } catch (err: any) {
+      const message = err?.message || 'API connection test failed.';
+      setApiTestSummary(message);
+      showToast('error', message);
+    } finally {
+      setIsTestingApi(false);
     }
   };
 
@@ -124,7 +160,7 @@ export default function AdminToolPage() {
     return <AdminErrorState message={error || 'Telemetry unavailable.'} onRetry={fetchTelemetry} />;
   }
 
-  const { settings, liveTablesCount, activeSubscribersWithAccess, uniqueUsersWithAccess, strategyDistribution, tables, telemetryNotice } = telemetry;
+  const { settings, liveTablesCount, activeSubscribersWithAccess, uniqueUsersWithAccess, tables, telemetryNotice } = telemetry;
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
@@ -314,11 +350,11 @@ export default function AdminToolPage() {
               </h3>
             </div>
             <span className={`text-[10px] font-mono px-2.5 py-0.5 rounded-full border font-bold uppercase ${
-              dsApiKey && dsApiUrl
+              dsApiKeyConfigured && dsApiUrl
                 ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
                 : 'border-amber-500/40 bg-amber-500/10 text-amber-400'
             }`}>
-              {dsApiKey && dsApiUrl ? 'Connected' : 'Credentials Required'}
+              {dsApiKeyConfigured && dsApiUrl ? 'Key Configured' : 'Credentials Required'}
             </span>
           </div>
 
@@ -352,7 +388,11 @@ export default function AdminToolPage() {
                   type={showApiKey ? 'text' : 'password'}
                   value={dsApiKey}
                   onChange={(e) => setDsApiKey(e.target.value)}
-                  placeholder="sk_live_..."
+                  placeholder={
+                    dsApiKeyConfigured
+                      ? `${dsApiKeyMasked || 'sk_live_••••••••'} — leave blank to keep`
+                      : 'sk_live_...'
+                  }
                   className="w-full px-3 py-2.5 pr-10 rounded-xl border border-white/10 bg-white/5 font-mono text-xs text-white placeholder:text-slate-600 focus:border-amber-500/50 focus:outline-none"
                 />
                 <button
@@ -364,9 +404,32 @@ export default function AdminToolPage() {
                 </button>
               </div>
               <p className="text-[10px] text-slate-500 font-mono mt-1">
-                Your 43-character base64url server live key (sk_live_...)
+                {dsApiKeyConfigured
+                  ? `Stored encrypted: ${dsApiKeyMasked || 'sk_live_••••••••'}. Leave blank to keep unchanged.`
+                  : 'Your server live key (sk_live_...). It is encrypted at rest.'}
               </p>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleTestApi}
+              disabled={isTestingApi}
+              className="flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-2 font-display text-xs font-bold uppercase tracking-wider text-amber-300 hover:bg-amber-500/25 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isTestingApi ? 'animate-spin' : ''}`} />
+              {isTestingApi ? 'Testing…' : 'Test API Connection'}
+            </button>
+            <a
+              href="/heda/settings?tab=api"
+              className="flex items-center gap-1.5 rounded-xl border border-teal-500/40 bg-teal-500/10 px-4 py-2 font-display text-xs font-bold uppercase tracking-wider text-teal-300 hover:bg-teal-500/20"
+            >
+              Open Full API Settings
+            </a>
+            {apiTestSummary && (
+              <span className="font-mono text-[10px] text-slate-300">{apiTestSummary}</span>
+            )}
           </div>
         </div>
       </div>

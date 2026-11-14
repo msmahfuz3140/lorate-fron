@@ -33,16 +33,24 @@ import {
   ArrowUpDown,
   ExternalLink,
   LifeBuoy,
-  Radio
+  Radio,
+  Info
 } from 'lucide-react';
 
 export default function AdminSettingsPage() {
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<'tool' | 'plans' | 'website' | 'announcements' | 'support'>('tool');
+  const [activeTab, setActiveTab] = useState<'tool' | 'api' | 'plans' | 'website' | 'announcements' | 'support'>('tool');
 
   useEffect(() => {
     const tabParam = searchParams?.get('tab');
-    if (tabParam === 'support' || tabParam === 'plans' || tabParam === 'website' || tabParam === 'announcements' || tabParam === 'tool') {
+    if (
+      tabParam === 'support' ||
+      tabParam === 'plans' ||
+      tabParam === 'website' ||
+      tabParam === 'announcements' ||
+      tabParam === 'tool' ||
+      tabParam === 'api'
+    ) {
       setActiveTab(tabParam as any);
     }
   }, [searchParams]);
@@ -63,6 +71,14 @@ export default function AdminSettingsPage() {
   });
   const [showApiKey, setShowApiKey] = useState(false);
   const [savingTool, setSavingTool] = useState(false);
+
+  // Dedicated API Settings state. The plaintext key is never loaded from the
+  // server: a blank key input means "keep the currently configured key".
+  const [apiForm, setApiForm] = useState({ dsApiUrl: '', dsApiKey: '' });
+  const [apiMeta, setApiMeta] = useState<any>(null);
+  const [savingApi, setSavingApi] = useState(false);
+  const [testingApi, setTestingApi] = useState(false);
+  const [apiTestResult, setApiTestResult] = useState<any>(null);
 
   // Plans Management State
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
@@ -90,15 +106,38 @@ export default function AdminSettingsPage() {
     setLoading(true);
     setSaveError(null);
     try {
-      const [toolRes, plansRes, webRes] = await Promise.all([
+      const [toolRes, plansRes, webRes, diagnosticsRes] = await Promise.allSettled([
         authClient.getAdminToolSettings(),
         authClient.getAdminPlans(),
-        authClient.getAdminWebsiteSettings()
+        authClient.getAdminWebsiteSettings(),
+        authClient.getAdminDsDiagnostics()
       ]);
 
-      if (toolRes) setToolSettings(toolRes);
-      if (plansRes) setPlans(plansRes);
-      if (webRes) setWebsiteSettings(webRes);
+      const toolValue = toolRes.status === 'fulfilled' ? toolRes.value : null;
+      const plansValue = plansRes.status === 'fulfilled' ? plansRes.value : null;
+      const webValue = webRes.status === 'fulfilled' ? webRes.value : null;
+      const diagnosticsValue =
+        diagnosticsRes.status === 'fulfilled' ? diagnosticsRes.value : null;
+
+      if (toolValue) {
+        setToolSettings(toolValue);
+        setApiForm({
+          dsApiUrl: toolValue.dsApiUrl || '',
+          dsApiKey: ''
+        });
+      }
+      if (diagnosticsValue) setApiMeta(diagnosticsValue);
+      else if (toolValue) setApiMeta(toolValue);
+      if (plansValue) setPlans(plansValue);
+      if (webValue) setWebsiteSettings(webValue);
+
+      if (!toolValue) {
+        const reason =
+          toolRes.status === 'rejected'
+            ? toolRes.reason?.message
+            : 'Tool settings could not be loaded.';
+        setSaveError(reason || 'Tool settings could not be loaded.');
+      }
     } catch (err: any) {
       setSaveError(err?.message || 'Failed to load system settings.');
     } finally {
@@ -109,6 +148,8 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     fetchAllSettings();
   }, [fetchAllSettings]);
+
+
 
   // Clear notifications after 4s
   useEffect(() => {
@@ -125,15 +166,14 @@ export default function AdminSettingsPage() {
     setSaveError(null);
     setSaveSuccess(null);
     try {
+      // API credentials are managed only in the dedicated API Settings tab.
       const updated = await authClient.updateAdminToolSettings({
         isToolEnabled: toolSettings.isToolEnabled,
         maintenanceMode: toolSettings.maintenanceMode,
         publicStatusMessage: toolSettings.publicStatusMessage,
         toolVersion: toolSettings.toolVersion,
         toolAccessPolicy: toolSettings.toolAccessPolicy,
-        premiumRequirements: toolSettings.premiumRequirements,
-        dsApiKey: toolSettings.dsApiKey,
-        dsApiUrl: toolSettings.dsApiUrl
+        premiumRequirements: toolSettings.premiumRequirements
       });
       setToolSettings(updated);
       setSaveSuccess('Tool parameters saved and server policies synchronized.');
@@ -141,6 +181,115 @@ export default function AdminSettingsPage() {
       setSaveError(err?.message || 'Failed to update tool settings.');
     } finally {
       setSavingTool(false);
+    }
+  };
+
+  const refreshApiDiagnostics = useCallback(async () => {
+    try {
+      const diagnostics = await authClient.getAdminDsDiagnostics();
+      if (diagnostics) setApiMeta(diagnostics);
+    } catch {
+      // Diagnostics are non-critical; the last values remain visible.
+    }
+  }, []);
+
+  // Keep the API diagnostics panel live while it is open.
+  useEffect(() => {
+    if (activeTab !== 'api') return;
+    const timer = setInterval(() => {
+      void refreshApiDiagnostics();
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [activeTab, refreshApiDiagnostics]);
+
+  const handleSaveApiConfiguration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingApi(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+    try {
+      const payload: any = {
+        dsApiUrl: apiForm.dsApiUrl,
+        reason: 'Main Admin updated Dealer Signature API configuration'
+      };
+      // Blank means "keep existing". The server never returns the plaintext key.
+      if (apiForm.dsApiKey.trim()) {
+        payload.dsApiKey = apiForm.dsApiKey.trim();
+      }
+
+      const updated = await authClient.updateAdminToolSettings(payload);
+      setToolSettings(updated);
+      setApiForm({
+        dsApiUrl: updated?.dsApiUrl || apiForm.dsApiUrl,
+        dsApiKey: ''
+      });
+      setApiTestResult(null);
+      setSaveSuccess(
+        'API configuration saved. The SK key is encrypted server-side and was not written to the browser.'
+      );
+      await refreshApiDiagnostics();
+    } catch (err: any) {
+      setSaveError(err?.message || 'Failed to save API configuration.');
+    } finally {
+      setSavingApi(false);
+    }
+  };
+
+  const handleTestApiConnection = async () => {
+    setTestingApi(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+    setApiTestResult(null);
+    try {
+      const result = await authClient.testAdminDsConnection({
+        dsApiUrl: apiForm.dsApiUrl,
+        dsApiKey: apiForm.dsApiKey.trim() || undefined
+      });
+      setApiTestResult({
+        ...result,
+        usedUnsavedKey: !!apiForm.dsApiKey.trim()
+      });
+      if (result?.success) {
+        setSaveSuccess(
+          `API connection test passed in ${result.latencyMs ?? 0} ms.`
+        );
+      } else {
+        setSaveError(
+          result?.error?.message ||
+            result?.checks?.find((check: any) => !check.ok)?.message ||
+            'API connection test failed.'
+        );
+      }
+      await refreshApiDiagnostics();
+    } catch (err: any) {
+      setSaveError(err?.message || 'API connection test failed.');
+    } finally {
+      setTestingApi(false);
+    }
+  };
+
+  const handleClearApiKey = async () => {
+    if (!window.confirm('Remove the stored Server SK Key? Live tools will stop until a new key is saved.')) {
+      return;
+    }
+    setSavingApi(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+    try {
+      const updated = await authClient.updateAdminToolSettings({
+        dsApiUrl: apiForm.dsApiUrl,
+        clearDsApiKey: true,
+        reason: 'Main Admin removed the stored Dealer Signature API key'
+      });
+      setToolSettings(updated);
+      setApiForm({ dsApiUrl: updated?.dsApiUrl || '', dsApiKey: '' });
+      setApiTestResult(null);
+      setSaveSuccess('Stored API key removed. Save a new key to restore live tools.');
+      await refreshApiDiagnostics();
+    } catch (err: any) {
+      setSaveError(err?.message || 'Failed to remove the stored API key.');
+    } finally {
+      setSavingApi(false);
     }
   };
 
@@ -301,6 +450,40 @@ export default function AdminSettingsPage() {
     });
   };
 
+  const formatWhen = (value?: string | null) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleString();
+  };
+
+  // A recent successful proxied request is stronger evidence than an older
+  // manual test result. This keeps the status card truthful at all times.
+  const apiConnectionHealthy = (() => {
+    const successMs = Date.parse(apiMeta?.dsLastSuccessAt || '');
+    const errorMs = Date.parse(apiMeta?.dsLastErrorAt || '');
+    return Number.isFinite(successMs) && (!Number.isFinite(errorMs) || successMs >= errorMs);
+  })();
+
+  const apiStatusLabel = apiConnectionHealthy
+    ? 'Connected'
+    : apiMeta?.dsLastTestSuccess === false
+      ? 'Test Failed'
+      : apiMeta?.dsLastTestSuccess === true
+        ? 'Degraded'
+        : 'Not Tested';
+  const apiStatusDot = apiConnectionHealthy
+    ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]'
+    : apiMeta?.dsLastTestSuccess === false
+      ? 'bg-rose-400'
+      : 'bg-amber-400';
+  const apiStatusMessage = apiConnectionHealthy
+    ? 'The most recent proxied provider request succeeded.'
+    : apiMeta?.dsLastError
+      ? `Most recent request failed: ${apiMeta.dsLastError}`
+      : apiMeta?.dsLastTestMessage ||
+        'Run Test API Connection to validate the saved credentials.';
+
   return (
     <div className="space-y-8 animate-fade-in pb-16">
       {/* Top Header */}
@@ -356,6 +539,18 @@ export default function AdminSettingsPage() {
         >
           <Terminal className="h-4 w-4" />
           Tool Management
+        </button>
+
+        <button
+          onClick={() => setActiveTab('api')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-display text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+            activeTab === 'api'
+              ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Radio className="h-4 w-4" />
+          API Settings
         </button>
 
         <button
@@ -566,73 +761,29 @@ export default function AdminSettingsPage() {
                     />
                   </div>
 
-                  {/* Dealer Signature Live API Integration */}
-                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-4">
-                    <div className="flex items-center justify-between border-b border-amber-500/20 pb-3">
-                      <div className="flex items-center gap-2">
-                        <Radio className="h-4 w-4 text-amber-400" />
-                        <span className="font-display text-xs font-bold uppercase tracking-wider text-amber-300">
-                          Dealer Signature Engine API Credentials
-                        </span>
-                      </div>
-                      <span className={`text-[10px] font-mono px-2.5 py-0.5 rounded-full border font-bold uppercase ${
-                        toolSettings.dsApiKey && toolSettings.dsApiUrl
-                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-                          : 'border-amber-500/40 bg-amber-500/10 text-amber-400'
-                      }`}>
-                        {toolSettings.dsApiKey && toolSettings.dsApiUrl ? 'Connected' : 'Credentials Required'}
-                      </span>
-                    </div>
-
-                    <p className="font-body text-xs text-slate-300 leading-relaxed">
-                      Enter your Dealer Signature Server API Key (<code className="text-amber-400 font-mono">sk_live_...</code>) and Public API URL. The backend automatically cryptographically signs requests with HMAC-SHA256 and streams real-time wheel predictions, W/L patterns, and travel data to the platform tool.
-                    </p>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Dedicated API Settings pointer */}
+                  <div className="rounded-xl border border-teal-500/30 bg-teal-500/5 p-5">
+                    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                       <div>
-                        <label className="font-display text-xs font-bold uppercase tracking-wider text-slate-300 block mb-2">
-                          API Public Base URL
-                        </label>
-                        <input
-                          type="url"
-                          value={toolSettings.dsApiUrl || ''}
-                          onChange={(e) =>
-                            setToolSettings({ ...toolSettings, dsApiUrl: e.target.value })
-                          }
-                          placeholder="https://your-roulette-api.com"
-                          className="w-full rounded-xl border border-white/10 bg-black/40 p-3 font-mono text-xs text-white placeholder-slate-600 focus:border-amber-500 focus:outline-none"
-                        />
-                        <p className="font-mono text-[10px] text-slate-500 mt-1">
-                          The public URL of the running Dealer Signature API (e.g. https://api.yourdomain.com)
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className="font-display text-xs font-bold uppercase tracking-wider text-slate-300 block mb-2">
-                          Server API Key (sk_key)
-                        </label>
-                        <div className="relative">
-                          <input
-                            type={showApiKey ? 'text' : 'password'}
-                            value={toolSettings.dsApiKey || ''}
-                            onChange={(e) =>
-                              setToolSettings({ ...toolSettings, dsApiKey: e.target.value })
-                            }
-                            placeholder="sk_live_..."
-                            className="w-full rounded-xl border border-white/10 bg-black/40 p-3 pr-10 font-mono text-xs text-white placeholder-slate-600 focus:border-amber-500 focus:outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowApiKey(!showApiKey)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                          >
-                            {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </button>
+                        <div className="flex items-center gap-2">
+                          <Radio className="h-4 w-4 text-teal-400" />
+                          <span className="font-display text-xs font-bold uppercase tracking-wider text-teal-300">
+                            Dealer Signature API Credentials
+                          </span>
                         </div>
-                        <p className="font-mono text-[10px] text-slate-500 mt-1">
-                          Server key (sk_live_...). Used by backend proxy with HMAC-SHA256 signing.
+                        <p className="mt-1 font-body text-xs text-slate-300">
+                          The Public API URL and Server SK Key now live in the dedicated, encrypted{' '}
+                          <b>API Settings</b> tab. The key is never returned to the browser.
                         </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('api')}
+                        className="flex shrink-0 items-center gap-1.5 rounded-xl border border-teal-500/40 bg-teal-500/15 px-3.5 py-2 font-display text-xs font-bold uppercase tracking-wider text-teal-300 hover:bg-teal-500/25"
+                      >
+                        <Settings className="h-3.5 w-3.5" />
+                        Open API Settings
+                      </button>
                     </div>
                   </div>
 
@@ -647,6 +798,293 @@ export default function AdminSettingsPage() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: DEDICATED API SETTINGS */}
+          {activeTab === 'api' && (
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-white/10 bg-[#070c16]/80 p-6 backdrop-blur-xl">
+                <div className="flex flex-col justify-between gap-3 border-b border-white/5 pb-4 sm:flex-row sm:items-center">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Radio className="h-4 w-4 text-teal-400" />
+                      <h2 className="font-display text-base font-bold uppercase tracking-wider text-white">
+                        Dealer Signature API Connection
+                      </h2>
+                      <span className={`rounded-full border px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase ${
+                        (apiMeta?.dsApiKeyConfigured ?? toolSettings.dsApiKeyConfigured)
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                          : 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                      }`}>
+                        {(apiMeta?.dsApiKeyConfigured ?? toolSettings.dsApiKeyConfigured)
+                          ? 'Key Configured'
+                          : 'Key Required'}
+                      </span>
+                    </div>
+                    <p className="mt-1 max-w-3xl font-body text-xs text-slate-400">
+                      Save only the Main Public API URL and Main Server SK Key. The backend signs every
+                      request with HMAC-SHA256; the secret key never reaches the browser or any public response.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={refreshApiDiagnostics}
+                    className="flex items-center gap-1.5 self-start rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 font-display text-xs font-bold uppercase tracking-wider text-slate-300 hover:bg-white/10 hover:text-white"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Refresh Status
+                  </button>
+                </div>
+
+                {/* Connection diagnostics */}
+                <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="rounded-xl border border-white/10 bg-black/30 p-4">
+                    <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Connection Status
+                    </span>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${apiStatusDot}`} />
+                      <span className="font-display text-sm font-black uppercase text-white">
+                        {apiStatusLabel}
+                      </span>
+                    </div>
+                    <p className="mt-2 line-clamp-3 break-words font-mono text-[10px] leading-relaxed text-slate-400">
+                      {apiStatusMessage}
+                    </p>
+                    <p className="mt-2 font-mono text-[10px] text-slate-500">
+                      Last test: {formatWhen(apiMeta?.dsLastTestAt)}
+                      {apiMeta?.dsLastTestLatencyMs !== undefined
+                        ? ` · ${apiMeta.dsLastTestLatencyMs} ms`
+                        : ''}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                    <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-emerald-300/80">
+                      Last Successful Request
+                    </span>
+                    <p className="mt-2 font-mono text-xs font-black text-emerald-300">
+                      {formatWhen(apiMeta?.dsLastSuccessAt)}
+                    </p>
+                    <p className="mt-2 font-mono text-[10px] text-slate-400">
+                      Last attempt: {formatWhen(apiMeta?.dsLastRequestAt)}
+                    </p>
+                    <p className="mt-1 break-all font-mono text-[10px] text-slate-500">
+                      Request ID: {apiMeta?.dsLastRequestId || '—'}
+                    </p>
+                  </div>
+
+                  <div className={`rounded-xl border p-4 ${
+                    apiMeta?.dsLastError
+                      ? 'border-rose-500/25 bg-rose-500/5'
+                      : 'border-white/10 bg-black/30'
+                  }`}>
+                    <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-rose-300/80">
+                      Last Error / Response Status
+                    </span>
+                    <p className="mt-2 font-mono text-xs font-black text-rose-300">
+                      {apiMeta?.dsLastError
+                        ? apiMeta?.dsLastStatusCode
+                          ? `HTTP ${apiMeta.dsLastStatusCode}`
+                          : 'Network / validation error'
+                        : 'No error recorded'}
+                    </p>
+                    <p className="mt-2 line-clamp-3 break-words font-mono text-[10px] leading-relaxed text-slate-400">
+                      {apiMeta?.dsLastError || '—'}
+                    </p>
+                    <p className="mt-2 font-mono text-[10px] text-slate-500">
+                      {formatWhen(apiMeta?.dsLastErrorAt)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Configuration form */}
+                <form onSubmit={handleSaveApiConfiguration} className="mt-6 space-y-5">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block font-display text-xs font-bold uppercase tracking-wider text-slate-300">
+                        Main Public API URL
+                      </label>
+                      <input
+                        type="url"
+                        value={apiForm.dsApiUrl}
+                        onChange={(event) =>
+                          setApiForm((previous) => ({ ...previous, dsApiUrl: event.target.value }))
+                        }
+                        placeholder="https://api.yourdomain.com"
+                        className="w-full rounded-xl border border-white/10 bg-black/40 p-3 font-mono text-xs text-white placeholder-slate-600 focus:border-teal-500 focus:outline-none"
+                      />
+                      <p className="mt-1 font-mono text-[10px] text-slate-500">
+                        Base URL only. A trailing <code>/api/v1</code> or <code>/api</code> is normalized automatically.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block font-display text-xs font-bold uppercase tracking-wider text-slate-300">
+                        Main Server SK Key
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showApiKey ? 'text' : 'password'}
+                          value={apiForm.dsApiKey}
+                          onChange={(event) =>
+                            setApiForm((previous) => ({ ...previous, dsApiKey: event.target.value }))
+                          }
+                          placeholder={
+                            apiMeta?.dsApiKeyConfigured
+                              ? `${apiMeta.dsApiKeyMasked || 'sk_live_••••••••'} — leave blank to keep`
+                              : 'sk_live_...'
+                          }
+                          autoComplete="new-password"
+                          className="w-full rounded-xl border border-white/10 bg-black/40 p-3 pr-10 font-mono text-xs text-white placeholder-slate-600 focus:border-teal-500 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowApiKey((value) => !value)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                          aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                        >
+                          {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <p className="mt-1 font-mono text-[10px] text-slate-500">
+                        Server key only (<code>sk_live_…</code>). Saved encrypted at rest; never placed in localStorage or a public API response.
+                      </p>
+                    </div>
+                  </div>
+
+                  {apiMeta?.dsApiKeyConfigured && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/5 bg-black/20 px-3 py-2 font-mono text-[10px] text-slate-400">
+                      <span className="font-bold uppercase text-slate-500">Stored key:</span>
+                      <code className="text-teal-300">{apiMeta.dsApiKeyMasked}</code>
+                      <span className="text-slate-600">·</span>
+                      <span>Leave the key field blank to keep it unchanged.</span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2 border-t border-white/5 pt-4">
+                    <button
+                      type="submit"
+                      disabled={savingApi || testingApi}
+                      className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-teal-600 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-wider text-black shadow-lg shadow-teal-500/20 hover:brightness-110 disabled:opacity-50"
+                    >
+                      <Save className="h-4 w-4" />
+                      {savingApi ? 'Saving…' : 'Save Configuration'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleTestApiConnection}
+                      disabled={savingApi || testingApi}
+                      className="flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/15 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-wider text-amber-300 hover:bg-amber-500/25 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${testingApi ? 'animate-spin' : ''}`} />
+                      {testingApi ? 'Testing…' : 'Test API Connection'}
+                    </button>
+
+                    {(apiMeta?.dsApiKeyConfigured ?? toolSettings.dsApiKeyConfigured) && (
+                      <button
+                        type="button"
+                        onClick={handleClearApiKey}
+                        disabled={savingApi || testingApi}
+                        className="ml-auto flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 font-display text-xs font-bold uppercase tracking-wider text-rose-300 hover:bg-rose-500/20 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Remove Stored Key
+                      </button>
+                    )}
+                  </div>
+                </form>
+
+                {/* Test result */}
+                {apiTestResult && (
+                  <div className={`mt-5 rounded-xl border p-4 ${
+                    apiTestResult.success
+                      ? 'border-emerald-500/30 bg-emerald-500/5'
+                      : 'border-rose-500/30 bg-rose-500/5'
+                  }`}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {apiTestResult.success ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4 text-rose-400" />
+                      )}
+                      <span className="font-display text-xs font-bold uppercase tracking-wider text-white">
+                        {apiTestResult.success ? 'Connection Test Passed' : 'Connection Test Failed'}
+                      </span>
+                      <span className="font-mono text-[10px] text-slate-400">
+                        {apiTestResult.latencyMs ?? 0} ms · {formatWhen(apiTestResult.testedAt)}
+                      </span>
+                      {apiTestResult.requestId && (
+                        <span className="font-mono text-[10px] text-slate-500">
+                          Request ID: {apiTestResult.requestId}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                      {(apiTestResult.checks || []).map((check: any, index: number) => (
+                        <div
+                          key={`${check.name}-${index}`}
+                          className="flex items-start gap-2 rounded-lg border border-white/5 bg-black/20 px-2.5 py-2"
+                        >
+                          <span className={`mt-0.5 text-[10px] font-black ${
+                            check.ok ? 'text-emerald-400' : 'text-rose-400'
+                          }`}>
+                            {check.ok ? '✓' : '✕'}
+                          </span>
+                          <div className="min-w-0">
+                            <span className="block font-mono text-[10px] font-bold uppercase text-slate-300">
+                              {check.name}
+                            </span>
+                            <span className="block break-words font-mono text-[10px] text-slate-400">
+                              {check.message}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {apiTestResult.tableCount !== undefined && (
+                      <p className="mt-3 font-mono text-[10px] text-slate-400">
+                        Live tables visible to this key: <b className="text-white">{apiTestResult.tableCount}</b>
+                        {apiTestResult.sampleTables?.length
+                          ? ` · ${apiTestResult.sampleTables.join(', ')}`
+                          : ''}
+                      </p>
+                    )}
+
+                    {apiTestResult.usedUnsavedKey && (
+                      <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 font-mono text-[10px] text-amber-200">
+                        This test used the key currently typed in the form. Click{' '}
+                        <b>Save Configuration</b> to persist it for the live website.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Security notes */}
+                <div className="mt-5 space-y-2 rounded-xl border border-white/5 bg-black/20 p-4 font-mono text-[10px] leading-relaxed text-slate-400">
+                  <p className="flex items-start gap-2">
+                    <Shield className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                    <span>
+                      The SK key is accepted only by the authenticated admin endpoint, encrypted at rest
+                      (AES-256-GCM), and decrypted only inside the backend proxy. It is never sent to
+                      the public tool, the browser source, localStorage, or an API response.
+                    </span>
+                  </p>
+                  <p className="flex items-start gap-2">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-400" />
+                    <span>
+                      Use a Server API Key (<code>sk_live_…</code>) with <code>status</code>,
+                      <code>tables.list</code> and <code>tables.prediction</code> permissions. A browser
+                      key cannot be used by the backend HMAC proxy.
+                    </span>
+                  </p>
+                </div>
               </div>
             </div>
           )}

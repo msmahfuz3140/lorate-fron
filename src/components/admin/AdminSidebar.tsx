@@ -130,6 +130,7 @@ const NAV_SECTIONS: NavSection[] = [
         icon: Terminal,
         subItems: [
           { name: 'Live Tool Operations', href: '/heda/tool' },
+          { name: 'API Settings', href: '/heda/settings?tab=api', badge: 'SK' },
           { name: 'Edit Support Info', href: '/heda/settings?tab=support', badge: 'TG' },
           { name: 'Website CMS Settings', href: '/heda/settings' },
           { name: 'Announcement Campaigns', href: '/heda/notifications' }
