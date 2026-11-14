@@ -22,7 +22,7 @@ Production-ready Next.js 16 (App Router) frontend interface with React 19, TypeS
 - **Dynamic Elements**: Real-time rotating strategy ticker, live table stream previews (Evolution Gaming & Pragmatic Play), and interactive subscription selection cards.
 - **Access Gating**: Active subscription validation gating access to `/dashboard/tool` with non-blocking `/plans` modals for guests and expired members.
 
----
+--
 
 ## 🏛️ Deployment Architecture
 
