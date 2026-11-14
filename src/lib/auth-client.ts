@@ -717,6 +717,54 @@ export const authClient = {
     });
   },
 
+  // --- Dealer Signature API Proxy Methods ---
+  async getDsConfig(): Promise<{ configured: boolean; apiUrl?: string; keyMasked?: string }> {
+    const res = await request<{ success: boolean; data: { configured: boolean; apiUrl?: string; keyMasked?: string } }>('/ds/config', {
+      bypassCache: true
+    });
+    return res?.data ?? (res as any);
+  },
+
+  async getDsStatus(): Promise<any> {
+    return request<any>('/ds/status', { bypassCache: true });
+  },
+
+  async getDsTables(params?: { provider?: string; search?: string; filter?: string; sort?: string; limit?: number; window?: number }): Promise<any> {
+    return request<any>(`/ds/tables${buildQueryString(params)}`, { bypassCache: true });
+  },
+
+  async getDsTablePrediction(tableId: string, direction: string = 'CW', window: number = 25): Promise<any> {
+    return request<any>(`/ds/tables/${encodeURIComponent(tableId)}/prediction?direction=${direction}&window=${window}`, {
+      bypassCache: true
+    });
+  },
+
+  async getDsTableTravelChart(tableId: string, direction: string = 'CW', window: number = 25): Promise<any> {
+    return request<any>(`/ds/tables/${encodeURIComponent(tableId)}/travel-chart?direction=${direction}&window=${window}`, {
+      bypassCache: true
+    });
+  },
+
+  async getDsTablePattern(tableId: string, direction: string = 'CW', window: number = 25): Promise<any> {
+    return request<any>(`/ds/tables/${encodeURIComponent(tableId)}/pattern?direction=${direction}&window=${window}`, {
+      bypassCache: true
+    });
+  },
+
+  async getDsTableHistory(tableId: string, params?: { period?: string; page?: number; limit?: number; window?: number }): Promise<any> {
+    return request<any>(`/ds/tables/${encodeURIComponent(tableId)}/history${buildQueryString(params)}`, {
+      bypassCache: true
+    });
+  },
+
+  async getDsScanner(params?: { min_spins?: number; min_accuracy?: number; min_rhythm?: number; direction?: string; sort?: string; window?: number }): Promise<any> {
+    return request<any>('/ds/scanner', {
+      method: 'POST',
+      body: JSON.stringify(params || {}),
+      bypassCache: true
+    });
+  },
+
   getStoredToken(): string | null {
     return getStoredToken();
   }

@@ -20,7 +20,9 @@ import {
   CheckCircle2,
   Clock,
   Radio,
-  Sliders
+  Sliders,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export default function AdminToolPage() {
@@ -34,6 +36,9 @@ export default function AdminToolPage() {
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [publicStatusMessage, setPublicStatusMessage] = useState('');
   const [toolAccessPolicy, setToolAccessPolicy] = useState('PREMIUM_ONLY');
+  const [dsApiKey, setDsApiKey] = useState('');
+  const [dsApiUrl, setDsApiUrl] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Confirmation dialogs
@@ -62,6 +67,8 @@ export default function AdminToolPage() {
         setMaintenanceMode(res.settings.maintenanceMode);
         setPublicStatusMessage(res.settings.publicStatusMessage || '');
         setToolAccessPolicy(res.settings.toolAccessPolicy || 'PREMIUM_ONLY');
+        setDsApiKey(res.settings.dsApiKey || '');
+        setDsApiUrl(res.settings.dsApiUrl || '');
       }
     } catch (err: any) {
       setError(err?.message || 'Failed to fetch roulette tool telemetry.');
@@ -82,6 +89,8 @@ export default function AdminToolPage() {
         maintenanceMode,
         publicStatusMessage,
         toolAccessPolicy,
+        dsApiKey,
+        dsApiUrl,
         reason: auditReason || 'Admin updated tool operational parameters'
       });
       showToast('success', 'Roulette tool parameters updated successfully.');
@@ -292,6 +301,72 @@ export default function AdminToolPage() {
               placeholder="All roulette prediction systems and real-time feeds are operating normally."
               className="w-full p-3 rounded-xl border border-white/10 bg-white/5 text-xs text-white placeholder:text-slate-500 focus:border-amber-500/50 focus:outline-none resize-none"
             />
+          </div>
+        </div>
+
+        {/* Dealer Signature API Configuration */}
+        <div className="pt-4 border-t border-white/5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Radio className="h-4 w-4 text-amber-400" />
+              <h3 className="font-display text-xs font-bold uppercase tracking-wider text-amber-300">
+                Dealer Signature Public Engine API Credentials
+              </h3>
+            </div>
+            <span className={`text-[10px] font-mono px-2.5 py-0.5 rounded-full border font-bold uppercase ${
+              dsApiKey && dsApiUrl
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                : 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+            }`}>
+              {dsApiKey && dsApiUrl ? 'Connected' : 'Credentials Required'}
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Enter your Dealer Signature Server API Key (<code className="text-amber-400 font-mono">sk_live_...</code>) and Public API URL. The backend automatically signs requests with HMAC-SHA256 and streams real-time wheel predictions, W/L patterns, and travel data to the platform tool.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-display text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                API Public Base URL
+              </label>
+              <input
+                type="url"
+                value={dsApiUrl}
+                onChange={(e) => setDsApiUrl(e.target.value)}
+                placeholder="https://your-roulette-api.com"
+                className="w-full px-3 py-2.5 rounded-xl border border-white/10 bg-white/5 font-mono text-xs text-white placeholder:text-slate-600 focus:border-amber-500/50 focus:outline-none"
+              />
+              <p className="text-[10px] text-slate-500 font-mono mt-1">
+                Public address of your Dealer Signature server (e.g. https://api.yourdomain.com)
+              </p>
+            </div>
+
+            <div>
+              <label className="block font-display text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                Server API Key (sk_key)
+              </label>
+              <div className="relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={dsApiKey}
+                  onChange={(e) => setDsApiKey(e.target.value)}
+                  placeholder="sk_live_..."
+                  className="w-full px-3 py-2.5 pr-10 rounded-xl border border-white/10 bg-white/5 font-mono text-xs text-white placeholder:text-slate-600 focus:border-amber-500/50 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                >
+                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-500 font-mono mt-1">
+                Your 43-character base64url server live key (sk_live_...)
+              </p>
+            </div>
           </div>
         </div>
       </div>

@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../../context/AuthContext';
-import { authClient } from '../../../lib/auth-client';
+import { authClient, getStoredToken } from '../../../lib/auth-client';
 import { AccessStatusResponse, SubscriptionStatus } from '../../../shared/subscriptions';
 import { PremiumLockOverlay } from '../../../components/PremiumLockOverlay';
 import { useToolWidget } from '../../../context/ToolWidgetContext';
+import { RouletteEngineTool } from '../../../components/tool/RouletteEngineTool';
 import {
   Activity,
   ArrowLeft,
@@ -78,13 +79,13 @@ export default function DashboardToolPage() {
           setAccessStatus((prev) =>
             prev
               ? {
-                  ...prev,
-                  hasAccess: false,
-                  code: 'SUBSCRIPTION_EXPIRED',
-                  status: SubscriptionStatus.EXPIRED,
-                  daysRemaining: 0,
-                  reason: 'Subscription period has expired. Please renew your plan.'
-                }
+                ...prev,
+                hasAccess: false,
+                code: 'SUBSCRIPTION_EXPIRED',
+                status: SubscriptionStatus.EXPIRED,
+                daysRemaining: 0,
+                reason: 'Subscription period has expired. Please renew your plan.'
+              }
               : null
           );
         }
@@ -320,41 +321,15 @@ export default function DashboardToolPage() {
               />
             </motion.div>
           ) : (
-            /* Authenticated Sandboxed Tool Execution with Guaranteed 100% Full Viewport Coverage */
+            /* Authenticated Native Roulette Intelligence Tool Execution */
             <motion.div
               key="unlocked"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.25, ease: 'easeOut' }}
-              className="absolute inset-0 w-full h-full flex flex-col bg-[#05090f] overflow-hidden"
+              className="absolute inset-0 w-full h-full flex flex-col bg-[#05090f] overflow-y-auto"
             >
-              {/* Optional loader while iframe initializes */}
-              {!iframeLoaded && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#05090f] text-slate-400">
-                  <div className="h-10 w-10 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent mb-3" />
-                  <p className="font-display text-xs uppercase tracking-widest text-slate-500">
-                    Initializing Real-Time Stream...
-                  </p>
-                </div>
-              )}
-
-              {/* Dynamic Sandboxed Tool Execution with Guaranteed Instant Updates */}
-              <iframe
-                key={toolKey}
-                src={`/api/roulette-tool?v=${toolKey}`}
-                title="Roulette Prediction Engine"
-                className="w-full h-full flex-1 border-0 block"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  minHeight: '100%',
-                  display: 'block',
-                  border: 'none'
-                }}
-                allow="fullscreen"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-                onLoad={() => setIframeLoaded(true)}
-              />
+              <RouletteEngineTool />
             </motion.div>
           )}
         </AnimatePresence>

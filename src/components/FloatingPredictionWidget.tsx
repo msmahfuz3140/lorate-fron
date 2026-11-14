@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToolWidget } from '../context/ToolWidgetContext';
-import { ApiRouletteTool } from './tool/ApiRouletteTool';
+import { RouletteEngineTool } from './tool/RouletteEngineTool';
 import {
   Minus,
   Maximize2,
@@ -339,42 +339,9 @@ export function FloatingPredictionWidget() {
           </div>
         </div>
 
-        {/* Content Body (Preserves iframe & socket state 100% without disconnecting) */}
-        <div className="flex-1 relative w-full h-full min-h-0 bg-[#05090f] overflow-hidden">
-          {/* Mode 1: Sandboxed Iframe (Current index.html tool) */}
-          <div
-            className={`absolute inset-0 w-full h-full flex flex-col ${
-              toolMode === 'iframe' ? 'block' : 'hidden'
-            }`}
-          >
-            {!iframeLoaded && (
-              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#05090f] text-slate-400">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent mb-2" />
-                <p className="font-display text-[11px] uppercase tracking-wider text-slate-400">
-                  Loading Real-Time Terminal...
-                </p>
-              </div>
-            )}
-            <iframe
-              ref={iframeRef}
-              src="/api/roulette-tool?overlay=1"
-              title="Floating Roulette Predictor"
-              className="w-full h-full flex-1 border-0 block"
-              allow="fullscreen"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-              onLoad={() => setIframeLoaded(true)}
-            />
-          </div>
-
-          {/* Mode 2: Future API Integration Component */}
-          {toolMode === 'api' && (
-            <ApiRouletteTool
-              onPredictionChange={(data) => {
-                updatePredictionData(data);
-              }}
-              onMinimize={minimizeToolWidget}
-            />
-          )}
+        {/* Content Body: Native Real-Time Roulette Prediction Engine */}
+        <div className="flex-1 relative w-full h-full min-h-0 bg-[#05090f] overflow-y-auto">
+          <RouletteEngineTool compact={true} />
         </div>
       </div>
 

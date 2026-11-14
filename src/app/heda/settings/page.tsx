@@ -32,7 +32,8 @@ import {
   Lock,
   ArrowUpDown,
   ExternalLink,
-  LifeBuoy
+  LifeBuoy,
+  Radio
 } from 'lucide-react';
 
 export default function AdminSettingsPage() {
@@ -56,8 +57,11 @@ export default function AdminSettingsPage() {
     publicStatusMessage: '',
     toolVersion: 'v2.5.0-pro',
     toolAccessPolicy: 'PREMIUM_ONLY',
-    premiumRequirements: ''
+    premiumRequirements: '',
+    dsApiKey: '',
+    dsApiUrl: ''
   });
+  const [showApiKey, setShowApiKey] = useState(false);
   const [savingTool, setSavingTool] = useState(false);
 
   // Plans Management State
@@ -127,7 +131,9 @@ export default function AdminSettingsPage() {
         publicStatusMessage: toolSettings.publicStatusMessage,
         toolVersion: toolSettings.toolVersion,
         toolAccessPolicy: toolSettings.toolAccessPolicy,
-        premiumRequirements: toolSettings.premiumRequirements
+        premiumRequirements: toolSettings.premiumRequirements,
+        dsApiKey: toolSettings.dsApiKey,
+        dsApiUrl: toolSettings.dsApiUrl
       });
       setToolSettings(updated);
       setSaveSuccess('Tool parameters saved and server policies synchronized.');
@@ -558,6 +564,76 @@ export default function AdminSettingsPage() {
                       }
                       className="w-full rounded-xl border border-white/10 bg-black/40 p-3 font-body text-xs text-white focus:border-amber-500 focus:outline-none"
                     />
+                  </div>
+
+                  {/* Dealer Signature Live API Integration */}
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-4">
+                    <div className="flex items-center justify-between border-b border-amber-500/20 pb-3">
+                      <div className="flex items-center gap-2">
+                        <Radio className="h-4 w-4 text-amber-400" />
+                        <span className="font-display text-xs font-bold uppercase tracking-wider text-amber-300">
+                          Dealer Signature Engine API Credentials
+                        </span>
+                      </div>
+                      <span className={`text-[10px] font-mono px-2.5 py-0.5 rounded-full border font-bold uppercase ${
+                        toolSettings.dsApiKey && toolSettings.dsApiUrl
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                          : 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+                      }`}>
+                        {toolSettings.dsApiKey && toolSettings.dsApiUrl ? 'Connected' : 'Credentials Required'}
+                      </span>
+                    </div>
+
+                    <p className="font-body text-xs text-slate-300 leading-relaxed">
+                      Enter your Dealer Signature Server API Key (<code className="text-amber-400 font-mono">sk_live_...</code>) and Public API URL. The backend automatically cryptographically signs requests with HMAC-SHA256 and streams real-time wheel predictions, W/L patterns, and travel data to the platform tool.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="font-display text-xs font-bold uppercase tracking-wider text-slate-300 block mb-2">
+                          API Public Base URL
+                        </label>
+                        <input
+                          type="url"
+                          value={toolSettings.dsApiUrl || ''}
+                          onChange={(e) =>
+                            setToolSettings({ ...toolSettings, dsApiUrl: e.target.value })
+                          }
+                          placeholder="https://your-roulette-api.com"
+                          className="w-full rounded-xl border border-white/10 bg-black/40 p-3 font-mono text-xs text-white placeholder-slate-600 focus:border-amber-500 focus:outline-none"
+                        />
+                        <p className="font-mono text-[10px] text-slate-500 mt-1">
+                          The public URL of the running Dealer Signature API (e.g. https://api.yourdomain.com)
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="font-display text-xs font-bold uppercase tracking-wider text-slate-300 block mb-2">
+                          Server API Key (sk_key)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showApiKey ? 'text' : 'password'}
+                            value={toolSettings.dsApiKey || ''}
+                            onChange={(e) =>
+                              setToolSettings({ ...toolSettings, dsApiKey: e.target.value })
+                            }
+                            placeholder="sk_live_..."
+                            className="w-full rounded-xl border border-white/10 bg-black/40 p-3 pr-10 font-mono text-xs text-white placeholder-slate-600 focus:border-amber-500 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowApiKey(!showApiKey)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                          >
+                            {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        <p className="font-mono text-[10px] text-slate-500 mt-1">
+                          Server key (sk_live_...). Used by backend proxy with HMAC-SHA256 signing.
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex justify-end pt-2">
