@@ -17,17 +17,16 @@ import {
   Clock,
   Sparkles,
   RefreshCw,
-  ExternalLink,
+  Globe2,
   AlertCircle,
   CheckCircle2,
-  Lock,
-  Minus
+  Lock
 } from 'lucide-react';
 
 export default function DashboardToolPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
-  const { minimizeToolWidget, popoutToolWindow } = useToolWidget();
+  const { openBettingOverlay } = useToolWidget();
 
   const [accessStatus, setAccessStatus] = useState<AccessStatusResponse | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
@@ -271,25 +270,13 @@ export default function DashboardToolPage() {
             )}
 
             <button
-              onClick={popoutToolWindow}
-              className="flex items-center gap-1.5 rounded-xl border border-teal-500/40 bg-teal-500/15 px-3 py-1.5 font-display text-xs font-bold uppercase tracking-wider text-teal-300 hover:bg-teal-500/25 transition-all shadow-sm cursor-pointer"
-              title="Float Always-On-Top over your betting site"
+              onClick={() => openBettingOverlay()}
+              className="flex items-center gap-1.5 rounded-xl border border-teal-500/40 bg-teal-500/15 px-3 py-1.5 font-display text-xs font-bold uppercase tracking-wider text-teal-300 transition-all hover:bg-teal-500/25"
+              title="Open the persistent betting-site side overlay"
             >
-              <ExternalLink className="h-3.5 w-3.5 text-teal-400" />
-              <span className="hidden sm:inline">Float on Betting Site</span>
-            </button>
-
-            <button
-              onClick={() => {
-                minimizeToolWidget();
-                router.push('/dashboard');
-              }}
-              title="Minimize into floating Messenger bubble"
-              className="flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/20 to-amber-600/20 px-3 py-1.5 font-display text-xs font-bold uppercase tracking-wider text-amber-300 hover:from-amber-500/30 hover:to-amber-600/30 hover:border-amber-400 transition-all shadow-[0_0_12px_rgba(245,158,11,0.2)] active:scale-95 cursor-pointer"
-            >
-              <Minus className="h-3.5 w-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Minimize to Bubble</span>
-              <span className="sm:hidden">Minimize</span>
+              <Globe2 className="h-3.5 w-3.5 text-teal-400" />
+              <span className="hidden sm:inline">Open Side Overlay</span>
+              <span className="sm:hidden">Overlay</span>
             </button>
 
             <button

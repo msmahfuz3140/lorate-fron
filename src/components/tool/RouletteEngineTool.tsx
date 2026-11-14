@@ -25,7 +25,6 @@ import {
   NormalizedPrediction,
   NormalizedRhythm,
   NormalizedTravelChart,
-  computeTravelChart,
   dsp,
   getNumberColor,
   normalizeDirection,
@@ -42,7 +41,6 @@ import { PredictionWheel } from './PredictionWheel';
 import { PatternGuide } from './PatternGuide';
 import { LiveGraphChart } from './LiveGraphChart';
 import { RacetrackOval } from './RacetrackOval';
-import { WlHistoryRows } from './WlHistoryRows';
 
 export interface RouletteEngineToolProps {
   compact?: boolean;
@@ -689,14 +687,6 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
   const spinsNewestFirst = deriveSpins(currentTable, travel, prediction);
   const spinsForFallback = useMemo(() => spinsNewestFirst, [spinsNewestFirst]);
 
-  const liveWlRows = useMemo(() => {
-    if (travel?.wlRows?.length) return travel.wlRows;
-    if (spinsForFallback.length > 1) {
-      return computeTravelChart(spinsForFallback, currentDirection, currentWindow)?.wlRows || [];
-    }
-    return [];
-  }, [travel, spinsForFallback, currentDirection, currentWindow]);
-
   const wlOldest: string[] = useMemo(() => {
     const wlChart = rawAnalysis?.wl_chart || rawAnalysis?.backtest?.wl_chart || {};
     if (Array.isArray(wlChart?.oldest_first)) {
@@ -1005,9 +995,9 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
       {/* Main grid */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
         {/* Left column */}
-        <div className="flex flex-col gap-3 lg:col-span-5">
+        <div className="flex flex-col gap-3 lg:col-span-5 max-lg:contents">
           {/* Live signal */}
-          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#0c1220] to-[#070b14] p-4 shadow-xl">
+          <div className="max-lg:order-4 rounded-2xl border border-white/10 bg-gradient-to-br from-[#0c1220] to-[#070b14] p-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-white/5 pb-3">
               <span className="flex items-center gap-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-slate-400">
                 <span className="h-2 w-2 rounded-sm bg-sky-400" />
@@ -1103,7 +1093,7 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
           </div>
 
           {/* Dealer Rhythm Match — direction-independent */}
-          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#0b1322] to-[#070b14] p-4 shadow-xl">
+          <div className="max-lg:order-5 rounded-2xl border border-white/10 bg-gradient-to-br from-[#0b1322] to-[#070b14] p-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-white/5 pb-3">
               <span className="flex items-center gap-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-slate-400">
                 <Activity className="h-3.5 w-3.5 text-teal-400" />
@@ -1245,7 +1235,7 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
           </div>
 
           {/* W/L pattern */}
-          <div className="space-y-3 rounded-2xl border border-white/10 bg-[#090e18] p-4 shadow-xl">
+          <div className="max-lg:order-3 space-y-3 rounded-2xl border border-white/10 bg-[#090e18] p-4 shadow-xl">
             <div className="flex items-center justify-between">
               <div>
                 <span className="block font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -1305,7 +1295,7 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
           </div>
 
           {/* Direction and controls */}
-          <div className="space-y-3.5 rounded-2xl border border-white/10 bg-[#090e18] p-4 shadow-xl">
+          <div className="max-lg:order-8 space-y-3.5 rounded-2xl border border-white/10 bg-[#090e18] p-4 shadow-xl">
             <div className="flex items-center justify-between">
               <button
                 type="button"
@@ -1394,7 +1384,7 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
           </div>
 
           {/* Feed meta */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-white/5 bg-black/30 px-3 py-2 font-mono text-[10px] text-slate-400">
+          <div className="max-lg:order-9 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-white/5 bg-black/30 px-3 py-2 font-mono text-[10px] text-slate-400">
             <span className="inline-flex items-center gap-1">
               <ShieldCheck className="h-3 w-3 text-emerald-400" />
               Server-side HMAC proxy
@@ -1413,9 +1403,9 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
         {/* Right column. On small screens the Wheel/Chart column comes first
             so the W/L cards below it are never forced into a cramped 2-column
             layout. */}
-        <div className="order-first flex flex-col gap-3 lg:order-none lg:col-span-7">
+        <div className="flex flex-col gap-3 lg:col-span-7 max-lg:contents">
           {/* Winning strip */}
-          <div className="flex items-center gap-3 overflow-x-auto rounded-2xl border border-white/10 bg-black/80 p-2.5 px-3 shadow-inner">
+          <div className="max-lg:order-1 flex items-center gap-3 overflow-x-auto rounded-2xl border border-white/10 bg-black/80 p-2.5 px-3 shadow-inner">
             <span className="shrink-0 font-mono text-[10px] font-bold uppercase text-slate-400">
               Winning Strip:
             </span>
@@ -1450,7 +1440,7 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
           </div>
 
           {/* View card */}
-          <div className="relative space-y-2 rounded-2xl border border-white/10 bg-[#070b14] p-4 shadow-xl">
+          <div className="max-lg:order-2 relative space-y-2 rounded-2xl border border-white/10 bg-[#070b14] p-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-white/5 pb-2">
               <span className="flex items-center gap-1.5 font-display text-xs font-bold uppercase tracking-wider text-white">
                 <span
@@ -1554,10 +1544,8 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
             )}
           </div>
 
-          <WlHistoryRows rows={liveWlRows} direction={currentDirection} />
-
           {/* Legend / model note */}
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="max-lg:order-6 grid grid-cols-1 gap-2 sm:grid-cols-3">
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
               <span className="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase text-amber-300">
                 <Zap className="h-3 w-3" /> Main prediction
@@ -1588,7 +1576,7 @@ export function RouletteEngineTool({ compact = false }: RouletteEngineToolProps)
           </div>
 
           {/* Safety / honest note */}
-          <div className="flex items-start gap-2 rounded-xl border border-white/5 bg-black/20 p-3 font-mono text-[10px] leading-relaxed text-slate-500">
+          <div className="max-lg:order-7 flex items-start gap-2 rounded-xl border border-white/5 bg-black/20 p-3 font-mono text-[10px] leading-relaxed text-slate-500">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
             <span>
               Predictions are generated from the live provider response and the

@@ -10,6 +10,11 @@ import {
   ResendOtpInput
 } from '../shared/auth';
 import { authClient, getStoredToken, clearStoredToken } from '../lib/auth-client';
+import {
+  clearDisclaimerPendingAfterLogin,
+  markDisclaimerPendingAfterLogin,
+  resetDisclaimerAcknowledgement
+} from '../lib/disclaimer-storage';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -59,6 +64,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (input: LoginInput): Promise<AuthResponse> => {
     const res = await authClient.login(input);
+    // A fresh login should show the mandatory disclaimer exactly once again.
+    resetDisclaimerAcknowledgement(res.user.id);
+    markDisclaimerPendingAfterLogin();
     setUser(res.user);
     setToken(res.token);
     return res;
@@ -66,6 +74,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (input: RegisterInput): Promise<AuthResponse> => {
     const res = await authClient.register(input);
+    resetDisclaimerAcknowledgement(res.user.id);
+    markDisclaimerPendingAfterLogin();
     setUser(res.user);
     setToken(res.token);
     return res;
@@ -73,6 +83,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const verifyOtp = async (input: VerifyOtpInput): Promise<AuthResponse> => {
     const res = await authClient.verifyOtp(input);
+    resetDisclaimerAcknowledgement(res.user.id);
+    markDisclaimerPendingAfterLogin();
     setUser(res.user);
     setToken(res.token);
     return res;
@@ -84,6 +96,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async (): Promise<void> => {
     await authClient.logout();
+    resetDisclaimerAcknowledgement();
+    clearDisclaimerPendingAfterLogin();
     setUser(null);
     setToken(null);
   };

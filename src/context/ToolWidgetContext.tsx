@@ -22,12 +22,10 @@ interface ToolWidgetContextType {
   hasAccess: boolean;
   bettingOverlayOpen: boolean;
   bettingOverlayUrl: string;
-  bettingOverlayCollapsed: boolean;
 
   // Actions
   openBettingOverlay: (url?: string) => void;
   closeBettingOverlay: () => void;
-  toggleBettingOverlayCollapsed: () => void;
   setBettingOverlayUrl: (url: string) => void;
   openToolWidget: () => void;
   minimizeToolWidget: () => void;
@@ -49,7 +47,6 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
   const [toolMode, setToolModeState] = useState<ToolMode>('iframe');
   const [hasAccess, setHasAccess] = useState(true);
   const [bettingOverlayOpen, setBettingOverlayOpen] = useState(false);
-  const [bettingOverlayCollapsed, setBettingOverlayCollapsed] = useState(false);
   const [bettingOverlayUrl, setBettingOverlayUrlState] = useState('');
   const [predictionData, setPredictionData] = useState<PredictionData>({
     // Empty until the real API returns a table/prediction. No mock numbers or
@@ -258,16 +255,10 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
       } catch {}
     }
     setBettingOverlayOpen(true);
-    setBettingOverlayCollapsed(false);
   }, []);
 
   const closeBettingOverlay = useCallback(() => {
     setBettingOverlayOpen(false);
-    setBettingOverlayCollapsed(false);
-  }, []);
-
-  const toggleBettingOverlayCollapsed = useCallback(() => {
-    setBettingOverlayCollapsed((previous) => !previous);
   }, []);
 
   const setBettingOverlayUrl = useCallback((url: string) => {
@@ -300,10 +291,8 @@ export function ToolWidgetProvider({ children }: { children: React.ReactNode }) 
         hasAccess,
         bettingOverlayOpen,
         bettingOverlayUrl,
-        bettingOverlayCollapsed,
         openBettingOverlay,
         closeBettingOverlay,
-        toggleBettingOverlayCollapsed,
         setBettingOverlayUrl,
         openToolWidget,
         minimizeToolWidget,

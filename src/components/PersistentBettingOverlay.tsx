@@ -2,8 +2,6 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ChevronDown,
-  ChevronUp,
   ExternalLink,
   Globe2,
   Maximize2,
@@ -39,9 +37,7 @@ export function PersistentBettingOverlay() {
   const {
     bettingOverlayOpen,
     bettingOverlayUrl,
-    bettingOverlayCollapsed,
     closeBettingOverlay,
-    toggleBettingOverlayCollapsed,
     setBettingOverlayUrl
   } = useToolWidget();
 
@@ -105,20 +101,6 @@ export function PersistentBettingOverlay() {
 
   if (!bettingOverlayOpen) return null;
 
-  if (bettingOverlayCollapsed) {
-    return (
-      <button
-        type="button"
-        onClick={toggleBettingOverlayCollapsed}
-        className="fixed bottom-4 right-4 z-[99997] flex items-center gap-2 rounded-xl border border-teal-500/40 bg-[#07121a]/95 px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-teal-300 shadow-[0_12px_35px_rgba(0,0,0,0.85)] backdrop-blur-xl hover:bg-teal-500/15"
-      >
-        <Globe2 className="h-3.5 w-3.5" />
-        Betting Overlay
-        <ChevronUp className="h-3.5 w-3.5" />
-      </button>
-    );
-  }
-
   const dimensions = SIZE_MAP[size];
 
   return (
@@ -172,14 +154,6 @@ export function PersistentBettingOverlay() {
               <ExternalLink className="h-3.5 w-3.5" />
             </button>
           )}
-          <button
-            type="button"
-            onClick={toggleBettingOverlayCollapsed}
-            className="rounded-md border border-white/10 bg-white/5 p-1.5 text-slate-300 hover:bg-white/10 hover:text-white"
-            title="Collapse overlay"
-          >
-            <ChevronDown className="h-3.5 w-3.5" />
-          </button>
           <button
             type="button"
             onClick={closeBettingOverlay}

@@ -51,7 +51,7 @@ export function DisclaimerModal({ isOpen, onProceed }: DisclaimerModalProps) {
       aria-modal="true"
       aria-labelledby="disclaimer-title"
     >
-      <div className="relative max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-amber-500/40 bg-[#080d18] p-5 shadow-[0_30px_100px_rgba(0,0,0,0.95)] sm:p-7">
+      <div className="relative max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-amber-500/40 bg-[#080d18] p-5 font-sans shadow-[0_30px_100px_rgba(0,0,0,0.95)] sm:p-7">
         <button
           type="button"
           onClick={onProceed}
@@ -75,9 +75,9 @@ export function DisclaimerModal({ isOpen, onProceed }: DisclaimerModalProps) {
             >
               Important — Please Read Before Using the Tools
             </h2>
-            <p className="mt-1 font-body text-xs leading-relaxed text-slate-400">
-              This warning is shown on every Open Tools click. Confirm each item
-              before following any live prediction.
+            <p className="mt-1.5 text-sm leading-relaxed text-slate-300">
+              Please read these four rules carefully. This notice is shown once
+              per account/browser, and again after a fresh login.
             </p>
           </div>
         </div>
@@ -89,18 +89,18 @@ export function DisclaimerModal({ isOpen, onProceed }: DisclaimerModalProps) {
               className="rounded-2xl border border-white/8 bg-white/[0.025] p-3.5 sm:p-4"
             >
               <div className="flex items-start gap-3">
-                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 font-mono text-[10px] font-black text-amber-300">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 font-sans text-xs font-black text-amber-300">
                   {warning.number}
                 </span>
                 <div>
-                  <h3 className="font-display text-xs font-black uppercase tracking-wider text-white">
+                  <h3 className="text-sm font-black uppercase tracking-wider text-white">
                     {warning.title}
                   </h3>
-                  <p className="mt-1 font-body text-xs leading-relaxed text-slate-300">
+                  <p className="mt-1.5 text-sm leading-relaxed text-slate-200">
                     {warning.body}
                   </p>
                   {warning.highlight && (
-                    <span className="mt-2 inline-flex rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] font-black text-amber-300">
+                    <span className="mt-2 inline-flex rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-1 text-xs font-black text-amber-300">
                       {warning.highlight} recommended minimum
                     </span>
                   )}
@@ -110,7 +110,7 @@ export function DisclaimerModal({ isOpen, onProceed }: DisclaimerModalProps) {
           ))}
         </div>
 
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-500/5 px-3 py-2.5 font-mono text-[10px] leading-relaxed text-rose-200/80">
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-500/5 px-3 py-2.5 text-xs leading-relaxed text-rose-100/90">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             No outcome is guaranteed. Rhythm Match and patterns are analytical
