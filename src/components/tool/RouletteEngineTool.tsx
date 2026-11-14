@@ -93,9 +93,9 @@ function friendlyError(err: any): ApiErrorShape {
     ENDPOINT_NOT_ALLOWED:
       'This API key does not have the tables.prediction permission. Enable it in the provider admin panel.',
     ORIGIN_REQUIRED:
-      'The provider requires an allowed origin. Use a Server SK Key from the backend proxy.',
+      'The provider key is in DOMAIN mode. The backend must forward the exact authorized website origin (x-client-origin).',
     ORIGIN_NOT_ALLOWED:
-      'The provider rejected the server origin. Check the key domain mode or provider settings.',
+      'The forwarded website origin is not in the provider key allowlist. Use the exact scheme + host + port configured on the key.',
     RATE_LIMITED:
       'The provider rate limit was reached. Automatic polling is paused briefly and then retried; the last valid data is kept.',
     DS_RATE_LIMITED:

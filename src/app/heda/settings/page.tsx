@@ -1048,14 +1048,21 @@ export default function AdminSettingsPage() {
                       ))}
                     </div>
 
-                    {apiTestResult.tableCount !== undefined && (
-                      <p className="mt-3 font-mono text-[10px] text-slate-400">
-                        Live tables visible to this key: <b className="text-white">{apiTestResult.tableCount}</b>
-                        {apiTestResult.sampleTables?.length
-                          ? ` · ${apiTestResult.sampleTables.join(', ')}`
-                          : ''}
-                      </p>
-                    )}
+                    <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 font-mono text-[10px] text-slate-400">
+                      {apiTestResult.clientOrigin && (
+                        <span>
+                          Forwarded origin: <b className="text-white">{apiTestResult.clientOrigin}</b>
+                        </span>
+                      )}
+                      {apiTestResult.tableCount !== undefined && (
+                        <span>
+                          Live tables visible: <b className="text-white">{apiTestResult.tableCount}</b>
+                          {apiTestResult.sampleTables?.length
+                            ? ` · ${apiTestResult.sampleTables.join(', ')}`
+                            : ''}
+                        </span>
+                      )}
+                    </div>
 
                     {apiTestResult.usedUnsavedKey && (
                       <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 font-mono text-[10px] text-amber-200">
